@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ainn-ui
+  namespace: ainn-copilot
+  labels:
+    app: ainn-ui
+    component: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ainn-ui
+  template:
+    metadata:
+      labels:
+        app: ainn-ui
+    spec:
+      containers:
+        - name: ainn-ui
+          image: ainn-ui:latest        # built from CODE/Agent/ui/Dockerfile
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8501
+          env:
+            - name: AGENT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: ainn-config
+                  key: AGENT_URL
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8501
+            initialDelaySeconds: 20
+            periodSeconds: 10
