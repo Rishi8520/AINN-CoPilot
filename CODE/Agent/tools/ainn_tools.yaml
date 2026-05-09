@@ -1,0 +1,63 @@
+# ─────────────────────────────────────────────────────────────────
+# AINN-CoPilot Tool Registry
+# This file is mounted into the OPEA agent container and tells the
+# agent what tools exist, when to use them, and how to call them.
+#
+# The 'description' field is READ BY THE LLM — write it as if you
+# are instructing a smart but literal assistant. Be specific.
+# ─────────────────────────────────────────────────────────────────
+
+run_simulation:
+  description: >
+    Run a Simu5G 5G network simulation for a specific scenario and return
+    real network KPIs. Use this tool when the operator reports a performance
+    issue (throughput drop, high latency, packet loss, excessive handovers,
+    interference) and you need quantitative data to confirm a hypothesis.
+    Also use this when asked to compare network behaviour across different
+    load or interference conditions.
+    Available scenarios:
+      - baseline: normal operation, 20 UEs, no stress
+      - high_load: maximum UE density, tests capacity limits
+      - interference_high: co-channel interference injected, tests SINR degradation
+      - handover_stress: rapid UE mobility, tests handover performance
+      - energy_saving: reduced TX power, tests coverage vs power trade-off
+  callable_api: tools.py:call_simulation
+  args_schema:
+    scenario:
+      type: str
+      description: >
+        The simulation scenario to run. Must be exactly one of:
+        baseline, high_load, interference_high, handover_stress, energy_saving.
+        Choose based on the operator's reported symptom.
+    ue_count:
+      type: int
+      description: >
+        Number of User Equipment (UEs) to simulate. Integer between 1 and 100.
+        Use 20 if the operator does not specify. Use higher values (50-100)
+        for capacity or high_load scenarios.
+    cell_id:
+      type: int
+      description: >
+        The cell identifier the operator is asking about. Use 0 if unknown
+        or if the operator does not specify a cell number.
+  return_output: simulation_kpis
+
+rag_retrieve:
+  description: >
+    Retrieve technical knowledge from the 3GPP and O-RAN specification corpus.
+    Use this tool when you need standards-based grounding for a diagnosis,
+    when the operator asks about protocols or procedures, when you need
+    remediation steps backed by specifications, or when you need to explain
+    why a particular network behaviour is occurring according to standards.
+    Do NOT use this for live network KPI data — use run_simulation for that.
+  callable_api: tools.py:call_rag
+  args_schema:
+    query:
+      type: str
+      description: >
+        A precise technical question to search the knowledge base.
+        Frame it as a specific question, not a vague keyword.
+        Good: "What are the recommended remediation steps for co-channel
+        interference in 5G NR according to O-RAN specifications?"
+        Bad: "interference"
+  return_output: retrieved_context
