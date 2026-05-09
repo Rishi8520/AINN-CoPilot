@@ -1,0 +1,177 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ainn-agent
+  namespace: ainn-copilot
+  labels:
+    app: ainn-agent
+    component: agent
+    part-of: ainn-copilot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ainn-agent
+  template:
+    metadata:
+      labels:
+        app: ainn-agent
+    spec:
+      containers:
+        - name: ainn-agent
+          image: opea/agent:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9090
+
+          # Mount tools directory
+          volumeMounts:
+            - name: tools-volume
+              mountPath: /home/user/comps/agent/src/tools
+
+          env:
+            # From ConfigMap
+            - name: strategy
+              valueFrom:
+                configMapKeyRef:
+                  name: ainn-config
+                  key: AGENT_STRATEGY
+            - name: recursion_limit
+              valueFrom:
+                configMapKeyRef:
+                  name: ainn-config
+                  key: RECURSION_LIMIT
+            - name: with_memory
+              valueFrom:
+                configMapKeyRef:
+                  name: ainn-config
+                  key: WITH_MEMORY
+            - name: SIM_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: ainn-config
+                  key: SIM_SERVICE_URL
+            - name: RAG_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: ainn-config
+                  key: RAG_SERVICE_URL
+            - name: model
+              valueFrom:
+                configMapKeyRef:
+                  name: ainn-config
+                  key: LLM_MODEL
+
+            # From Secret
+            - name: HUGGINGFACEHUB_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: ainn-secrets
+                  key: HF_TOKEN
+            - name: llm_endpoint_url
+              valueFrom:
+                secretKeyRef:
+                  name: ainn-secrets
+                  key: LLM_ENDPOINT_URL
+
+            # Hardcoded — same in all environments
+            - name: llm_engine
+              value: "vllm"
+            - name: require_human_feedback
+              value: "false"
+            - name: tools
+              value: "/home/user/comps/agent/src/tools/ainn_tools.yaml"
+
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9090
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9090
+            initialDelaySeconds: 90
+            periodSeconds: 10
+            failureThreshold: 5
+
+      # Tools are mounted from a ConfigMap volume
+      # In production, use a PersistentVolume or bake into a custom image
+      volumes:
+        - name: tools-volume
+          configMap:
+            name: ainn-tools-configmap
+
+---
+# Separate ConfigMap holding the actual tool files as data
+# This is how you get files into a K8s pod without a PVC
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ainn-tools-configmap
+  namespace: ainn-copilot
+data:
+  # Paste the full contents of ainn_tools.yaml here
+  # In CI/CD: kubectl create configmap ainn-tools-configmap
+  #           --from-file=../tools/ -n ainn-copilot
+  ainn_tools.yaml: |
+    run_simulation:
+      description: >
+        Run a Simu5G 5G network simulation. Use when operator reports
+        performance issues or when validating a hypothesis with KPI data.
+      callable_api: tools.py:call_simulation
+      args_schema:
+        scenario:
+          type: str
+          description: One of baseline, high_load, interference_high, handover_stress, energy_saving
+        ue_count:
+          type: int
+          description: Number of UEs (1-100). Default 20.
+        cell_id:
+          type: int
+          description: Cell identifier. Default 0.
+      return_output: simulation_kpis
+
+    rag_retrieve:
+      description: >
+        Retrieve from 3GPP/O-RAN knowledge base. Use for standards-based
+        grounding, remediation steps, or protocol explanations.
+      callable_api: tools.py:call_rag
+      args_schema:
+        query:
+          type: str
+          description: Specific technical question for the knowledge base.
+      return_output: retrieved_context
+
+  tools.py: |
+    import os, json, requests
+    SIM_SERVICE_URL = os.environ.get("SIM_SERVICE_URL", "http://localhost:8888")
+    RAG_SERVICE_URL = os.environ.get("RAG_SERVICE_URL", "http://localhost:8889")
+    def call_simulation(scenario, ue_count=20, cell_id=0):
+        try:
+            r = requests.post(f"{SIM_SERVICE_URL}/simulate",
+                json={"scenario": scenario, "ue_count": ue_count, "cell_id": cell_id},
+                timeout=120)
+            r.raise_for_status()
+            return json.dumps(r.json())
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+    def call_rag(query):
+        try:
+            r = requests.post(f"{RAG_SERVICE_URL}/v1/retrievaltool",
+                json={"text": query}, timeout=30)
+            r.raise_for_status()
+            return r.text
+        except Exception as e:
+            return json.dumps({"error": str(e)})
