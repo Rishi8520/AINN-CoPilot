@@ -1,0 +1,27 @@
+# Non-secret configuration shared across all pods.
+# Secrets (HF_TOKEN, LLM endpoint) go in a Secret object, not here.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ainn-config
+  namespace: ainn-copilot
+data:
+  # Agent configuration
+  AGENT_STRATEGY: "react_llama"
+  RECURSION_LIMIT: "15"
+  WITH_MEMORY: "true"
+
+  # Service URLs — inside K8s, services talk via ClusterIP DNS:
+  # format is http://<service-name>.<namespace>.svc.cluster.local:<port>
+  SIM_SERVICE_URL: "http://simulation-service.ainn-copilot.svc.cluster.local:8888"
+  RAG_SERVICE_URL: "http://rag-retrieval-service.ainn-copilot.svc.cluster.local:7000"
+
+  # Redis
+  REDIS_URL: "redis://redis-service.ainn-copilot.svc.cluster.local:6379"
+  INDEX_NAME: "ainn_3gpp"
+
+  # LLM model name (endpoint URL goes in Secret)
+  LLM_MODEL: "meta-llama/Meta-Llama-3-8B-Instruct"
+
+  # UI
+  AGENT_URL: "http://agent-service.ainn-copilot.svc.cluster.local:9090"
