@@ -1,0 +1,9 @@
+# Creates an isolated Kubernetes namespace for the entire project.
+# Apply this first before anything else.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ainn-copilot
+  labels:
+    app: ainn-copilot
+    managed-by: opea
