@@ -1,0 +1,39 @@
+# ClusterIP — internal access only within the cluster
+# The UI pod reaches the agent through this service
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-service
+  namespace: ainn-copilot
+  labels:
+    app: ainn-agent
+spec:
+  selector:
+    app: ainn-agent
+  ports:
+    - name: http
+      protocol: TCP
+      port: 9090
+      targetPort: 9090
+  type: ClusterIP
+
+---
+# NodePort — exposes the UI to the outside world
+# Access via http://<node-ip>:30001 during demo
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui-service
+  namespace: ainn-copilot
+  labels:
+    app: ainn-ui
+spec:
+  selector:
+    app: ainn-ui
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8501
+      targetPort: 8501
+      nodePort: 30001     # fixed port so demo URL is predictable
+  type: NodePort
