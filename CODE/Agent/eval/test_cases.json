@@ -1,0 +1,53 @@
+{
+  "project": "AINN-CoPilot",
+  "description": "Benchmark test cases for OPEA agent evaluation",
+  "categories": {
+    "RAG only": "Queries that should trigger only the rag_retrieve tool",
+    "Simulation only": "Queries that should trigger only the run_simulation tool",
+    "Both tools": "Complex diagnostic queries requiring both tools in sequence"
+  },
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "category": "RAG only",
+      "query": "What does 3GPP specify about PDSCH scheduling in 5G NR?",
+      "expected_tool": "rag_retrieve"
+    },
+    {
+      "id": "TC-02",
+      "category": "RAG only",
+      "query": "Explain the O-RAN Non-RT RIC A1 interface and its role in policy management.",
+      "expected_tool": "rag_retrieve"
+    },
+    {
+      "id": "TC-03",
+      "category": "Simulation only",
+      "query": "Run a baseline simulation with 20 UEs on cell 0 and report the KPIs.",
+      "expected_tool": "run_simulation"
+    },
+    {
+      "id": "TC-04",
+      "category": "Simulation only",
+      "query": "Run a high interference scenario with 30 UEs and tell me the SINR and packet loss.",
+      "expected_tool": "run_simulation"
+    },
+    {
+      "id": "TC-05",
+      "category": "Both tools",
+      "query": "Cell 7 is showing 40% throughput degradation. Run a simulation to diagnose and explain what the standards say about this condition.",
+      "expected_tool": "both"
+    },
+    {
+      "id": "TC-06",
+      "category": "Both tools",
+      "query": "There are 45 handovers per minute on cell 3. Is this abnormal? Simulate handover stress and check what O-RAN recommends.",
+      "expected_tool": "both"
+    },
+    {
+      "id": "TC-07",
+      "category": "Both tools",
+      "query": "Compare high_load and baseline scenarios for 50 UEs, and cite the 3GPP capacity planning guidelines.",
+      "expected_tool": "both"
+    }
+  ]
+}
