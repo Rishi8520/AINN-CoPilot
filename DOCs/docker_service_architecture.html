@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AINN-CoPilot Architecture</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #161b27;
+      --surface2: #1e2538;
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #e2e8f0;
+      --muted: #8892a4;
+      --faint: #4a5568;
+      --teal: #2dd4bf;
+      --teal-dim: rgba(45, 212, 191, 0.12);
+      --teal-glow: rgba(45, 212, 191, 0.25);
+      --blue: #60a5fa;
+      --blue-dim: rgba(96, 165, 250, 0.1);
+      --orange: #fb923c;
+      --orange-dim: rgba(251, 146, 60, 0.1);
+      --green: #4ade80;
+      --green-dim: rgba(74, 222, 128, 0.1);
+      --purple: #a78bfa;
+      --purple-dim: rgba(167, 139, 250, 0.1);
+      --yellow: #fbbf24;
+      --red: #f87171;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--teal);
+      letter-spacing: 0.04em;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 28px;
+    }
+
+    /* ── Layout ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+      max-width: 1200px;
+      margin: 0 auto 32px;
+    }
+
+    /* ── Machine boxes ── */
+    .machine {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      background: var(--surface);
+      position: relative;
+    }
+
+    .machine.m3 {
+      border-color: rgba(45, 212, 191, 0.35);
+    }
+
+    .machine.m1 {
+      border-color: rgba(251, 146, 60, 0.35);
+    }
+
+    .machine.m2 {
+      border-color: rgba(96, 165, 250, 0.35);
+    }
+
+    .machine-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .machine-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .m3 .machine-dot {
+      background: var(--teal);
+      box-shadow: 0 0 8px var(--teal-glow);
+    }
+
+    .m1 .machine-dot {
+      background: var(--orange);
+      box-shadow: 0 0 8px rgba(251, 146, 60, 0.4);
+    }
+
+    .m2 .machine-dot {
+      background: var(--blue);
+      box-shadow: 0 0 8px rgba(96, 165, 250, 0.4);
+    }
+
+    .machine-name {
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .machine-spec {
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    /* ── Service chips ── */
+    .services {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .svc {
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 1px solid transparent;
+      transition: filter 0.2s;
+    }
+
+    .svc:hover {
+      filter: brightness(1.15);
+    }
+
+    .svc-name {
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .svc-port {
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--muted);
+    }
+
+    .svc-desc {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .svc.ui {
+      background: var(--teal-dim);
+      border-color: rgba(45, 212, 191, 0.2);
+    }
+
+    .svc.agent {
+      background: var(--purple-dim);
+      border-color: rgba(167, 139, 250, 0.2);
+    }
+
+    .svc.gateway {
+      background: rgba(99, 102, 241, 0.1);
+      border-color: rgba(99, 102, 241, 0.2);
+    }
+
+    .svc.embed {
+      background: rgba(244, 114, 182, 0.08);
+      border-color: rgba(244, 114, 182, 0.15);
+    }
+
+    .svc.rerank {
+      background: rgba(251, 191, 36, 0.08);
+      border-color: rgba(251, 191, 36, 0.15);
+    }
+
+    .svc.redis {
+      background: rgba(248, 113, 113, 0.08);
+      border-color: rgba(248, 113, 113, 0.15);
+    }
+
+    .svc.eval {
+      background: var(--green-dim);
+      border-color: rgba(74, 222, 128, 0.15);
+    }
+
+    .svc.sim {
+      background: var(--orange-dim);
+      border-color: rgba(251, 146, 60, 0.2);
+    }
+
+    .svc.wsl {
+      background: rgba(251, 146, 60, 0.05);
+      border-color: rgba(251, 146, 60, 0.1);
+    }
+
+    .svc.llm {
+      background: var(--blue-dim);
+      border-color: rgba(96, 165, 250, 0.2);
+    }
+
+    /* ── Arrow / connection section ── */
+    .connections {
+      max-width: 1200px;
+      margin: 0 auto 32px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .connections h2 {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 16px;
+    }
+
+    .conn-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 10px;
+    }
+
+    .conn {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+    }
+
+    .conn-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 800;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .conn-body {
+      flex: 1;
+    }
+
+    .conn-title {
+      font-weight: 600;
+      font-size: 12px;
+      margin-bottom: 2px;
+    }
+
+    .conn-sub {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .proto {
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.07);
+      margin-left: 4px;
+    }
+
+    /* ── Scenario section ── */
+    .scenario {
+      max-width: 1200px;
+      margin: 0 auto 32px;
+      background: var(--surface);
+      border: 1px solid rgba(45, 212, 191, 0.2);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .scenario h2 {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--teal);
+      margin-bottom: 4px;
+    }
+
+    .scenario-sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 18px;
+    }
+
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .step {
+      display: flex;
+      gap: 14px;
+      position: relative;
+    }
+
+    .step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 15px;
+      top: 32px;
+      bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+
+    .step-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+      z-index: 1;
+      border: 2px solid var(--border);
+    }
+
+    .step-content {
+      padding-bottom: 20px;
+      flex: 1;
+    }
+
+    .step-actor {
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    .step-msg {
+      font-size: 12px;
+      color: var(--text);
+      margin-top: 2px;
+    }
+
+    .step-detail {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 3px;
+      font-style: italic;
+    }
+
+    .step-payload {
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      margin-top: 6px;
+      color: var(--teal);
+      white-space: pre;
+    }
+
+    /* ── Docker network note ── */
+    .net-note {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .note-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+
+    .note-card h3 {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--teal);
+      margin-bottom: 8px;
+    }
+
+    .note-card ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .note-card li {
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      gap: 6px;
+    }
+
+    .note-card li::before {
+      content: '›';
+      color: var(--teal);
+      flex-shrink: 0;
+    }
+
+    code {
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      background: rgba(255, 255, 255, 0.07);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--yellow);
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>AINN-CoPilot · Docker Service Architecture</h1>
+  <p class="subtitle">Three machines · One LAN · Nine containers · One intelligent copilot</p>
+
+  <!-- ═══════════════ MACHINE GRID ═══════════════ -->
+  <div class="layout">
+
+    <!-- M3 MACHINE -->
+    <div class="machine m3">
+      <div class="machine-header">
+        <div class="machine-dot"></div>
+        <div>
+          <div class="machine-name" style="color:var(--teal)">MEMBER 3 — Integration Owner</div>
+          <div class="machine-spec">AMD Ryzen 5 · 24GB RAM · RTX 3050 · Docker host</div>
+        </div>
+      </div>
+      <div class="services">
+        <div class="svc ui">
+          <div>
+            <div class="svc-name" style="color:var(--teal)">🖥 Streamlit UI</div>
+            <div class="svc-desc">User-facing chat interface</div>
+          </div>
+          <span class="svc-port">:8501</span>
+        </div>
+        <div class="svc gateway">
+          <div>
+            <div class="svc-name" style="color:#818cf8">⚡ OPEA Gateway</div>
+            <div class="svc-desc">Routes requests, auth, rate-limit</div>
+          </div>
+          <span class="svc-port">:8888</span>
+        </div>
+        <div class="svc agent">
+          <div>
+            <div class="svc-name" style="color:var(--purple)">🤖 OPEA Agent</div>
+            <div class="svc-desc">WorkflowExecAgent · tool caller</div>
+          </div>
+          <span class="svc-port">:9090</span>
+        </div>
+        <div class="svc embed">
+          <div>
+            <div class="svc-name" style="color:#f472b6">🔡 TEI Embedding</div>
+            <div class="svc-desc">BAAI/bge-base-en · query vectors</div>
+          </div>
+          <span class="svc-port">:6006</span>
+        </div>
+        <div class="svc rerank">
+          <div>
+            <div class="svc-name" style="color:var(--yellow)">⚖ TEI Reranker</div>
+            <div class="svc-desc">BAAI/bge-reranker · top-k filter</div>
+          </div>
+          <span class="svc-port">:8808</span>
+        </div>
+        <div class="svc redis">
+          <div>
+            <div class="svc-name" style="color:var(--red)">🗄 Redis VectorDB</div>
+            <div class="svc-desc">3GPP / O-RAN document chunks</div>
+          </div>
+          <span class="svc-port">:6379</span>
+        </div>
+        <div class="svc eval">
+          <div>
+            <div class="svc-name" style="color:var(--green)">📊 GenAIEval</div>
+            <div class="svc-desc">Latency · RAGAS · benchmark</div>
+          </div>
+          <span class="svc-port">:9999</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MEMBER 1 -->
+    <div class="machine m1">
+      <div class="machine-header">
+        <div class="machine-dot"></div>
+        <div>
+          <div class="machine-name" style="color:var(--orange)">MEMBER 1 — Sim Engineer</div>
+          <div class="machine-spec">8GB RAM · No GPU · WSL2 (Ubuntu) + Windows portproxy</div>
+        </div>
+      </div>
+      <div class="services">
+        <div class="svc wsl">
+          <div>
+            <div class="svc-name" style="color:var(--orange)">WSL2 Ubuntu Layer</div>
+            <div class="svc-desc">Linux environment inside Windows</div>
+          </div>
+          <span class="svc-port">bridge</span>
+        </div>
+        <div class="svc sim">
+          <div>
+            <div class="svc-name" style="color:var(--orange)">🔬 Simu5G / OMNeT++</div>
+            <div class="svc-desc">Headless simulator · NR-U · 5G NR scenarios</div>
+          </div>
+          <span class="svc-port">internal</span>
+        </div>
+        <div class="svc sim" style="background:rgba(251,146,60,0.15)">
+          <div>
+            <div class="svc-name" style="color:#fdba74">⚙ FastAPI Wrapper</div>
+            <div class="svc-desc">REST bridge → POST /simulate → JSON KPIs</div>
+          </div>
+          <span class="svc-port">:8888</span>
+        </div>
+      </div>
+      <div
+        style="margin-top:12px; padding:8px 10px; background:rgba(251,146,60,0.06); border-radius:6px; border:1px dashed rgba(251,146,60,0.2);">
+        <div style="font-size:10px; color:var(--muted);">Windows portproxy rule:</div>
+        <div style="font-family:monospace; font-size:10px; color:var(--orange); margin-top:3px;">netsh interface
+          portproxy add<br>listenport=8888 → WSL:8888</div>
+      </div>
+    </div>
+
+    <!-- MEMBER 2 -->
+    <div class="machine m2">
+      <div class="machine-header">
+        <div class="machine-dot"></div>
+        <div>
+          <div class="machine-name" style="color:var(--blue)">MEMBER 2 — RAG & LLM</div>
+          <div class="machine-spec">Intel Core Ultra 9 · 32GB RAM · RTX 5070 Ti 12GB VRAM</div>
+        </div>
+      </div>
+      <div class="services">
+        <div class="svc llm">
+          <div>
+            <div class="svc-name" style="color:var(--blue)">🧠 vLLM Server</div>
+            <div class="svc-desc">Mistral-7B-Instruct-v0.3 (AWQ 4-bit)</div>
+          </div>
+          <span class="svc-port">:8080</span>
+        </div>
+        <div class="svc llm" style="background:rgba(96,165,250,0.06)">
+          <div>
+            <div class="svc-name" style="color:#93c5fd">OpenAI-compatible API</div>
+            <div class="svc-desc">/v1/chat/completions endpoint</div>
+          </div>
+          <span class="svc-port">:8080</span>
+        </div>
+      </div>
+      <div
+        style="margin-top:12px; padding:8px 10px; background:rgba(96,165,250,0.05); border-radius:6px; border:1px dashed rgba(96,165,250,0.2);">
+        <div style="font-size:10px; color:var(--muted); margin-bottom:4px;">Also runs (on same machine):</div>
+        <div style="font-size:10px; color:var(--muted);">📥 Ingestion pipeline (one-time)</div>
+        <div style="font-size:10px; color:var(--muted);">✂ Chunker + embedder for 3GPP PDFs</div>
+        <div style="font-size:10px; color:var(--muted);">→ pushes vectors to YOUR Redis</div>
+      </div>
+      <div
+        style="margin-top:8px; padding:8px 10px; background:rgba(96,165,250,0.05); border-radius:6px; border:1px dashed rgba(96,165,250,0.15);">
+        <div style="font-size:10px; color:var(--muted);">Intel AMX on Ultra 9 275HX:</div>
+        <div style="font-size:10px; color:var(--blue); margin-top:2px;">IPEX / OpenVINO → Hardware bonus pts</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ CONNECTIONS ═══════════════ -->
+  <div class="connections">
+    <h2>Service-to-Service Connections</h2>
+    <div class="conn-grid">
+
+      <div class="conn">
+        <div class="conn-num" style="background:var(--teal-dim);color:var(--teal)">1</div>
+        <div class="conn-body">
+          <div class="conn-title">Browser → Streamlit UI<span class="proto">HTTP :8501</span></div>
+          <div class="conn-sub">User types query. Lives on M3 machine. Never leaves localhost.</div>
+        </div>
+      </div>
+
+      <div class="conn">
+        <div class="conn-num" style="background:rgba(99,102,241,0.15);color:#818cf8">2</div>
+        <div class="conn-body">
+          <div class="conn-title">UI → OPEA Gateway<span class="proto">HTTP :8888</span></div>
+          <div class="conn-sub">Docker bridge: <code>ainn-ui → ainn-gateway</code>. Internal only.</div>
+        </div>
+      </div>
+
+      <div class="conn">
+        <div class="conn-num" style="background:var(--purple-dim);color:var(--purple)">3</div>
+        <div class="conn-body">
+          <div class="conn-title">Gateway → OPEA Agent<span class="proto">HTTP :9090</span></div>
+          <div class="conn-sub">Docker bridge: <code>ainn-gateway → ainn-agent</code>. Internal only.</div>
+        </div>
+      </div>
+
+      <div class="conn">
+        <div class="conn-num" style="background:var(--blue-dim);color:var(--blue)">4</div>
+        <div class="conn-body">
+          <div class="conn-title">Agent → vLLM (M2)<span class="proto">LAN HTTP</span></div>
+          <div class="conn-sub">Crosses LAN to <code>M2_IP:8080</code>. Agent asks LLM "which tool to call?"</div>
+        </div>
+      </div>
+
+      <div class="conn">
+        <div class="conn-num" style="background:rgba(244,114,182,0.1);color:#f472b6">5</div>
+        <div class="conn-body">
+          <div class="conn-title">Agent → TEI Embedding<span class="proto">HTTP :6006</span></div>
+          <div class="conn-sub">Docker bridge. Vectorises the query before retrieval.</div>
+        </div>
+      </div>
+
+      <div class="conn">
+        <div class="conn-num" style="background:rgba(248,113,113,0.1);color:var(--red)">6</div>
+        <div class="conn-body">
+          <div class="conn-title">Agent → Redis VectorDB<span class="proto">TCP :6379</span></div>
+          <div class="conn-sub">Docker bridge. Searches top-k 3GPP/O-RAN chunks by cosine similarity.</div>
+        </div>
+      </div>
+
+      <div class="conn">
+        <div class="conn-num" style="background:rgba(251,191,36,0.1);color:var(--yellow)">7</div>
+        <div class="conn-body">
+          <div class="conn-title">Agent → TEI Reranker<span class="proto">HTTP :8808</span></div>
+          <div class="conn-sub">Docker bridge. Reranks top-k chunks by relevance before sending to LLM.</div>
+        </div>
+      </div>
+
+      <div class="conn">
+        <div class="conn-num" style="background:var(--orange-dim);color:var(--orange)">8</div>
+        <div class="conn-body">
+          <div class="conn-title">Agent → FastAPI / Simu5G (M1)<span class="proto">LAN HTTP</span></div>
+          <div class="conn-sub">Crosses LAN to <code>M1_IP:8888</code>. Triggers live 5G simulation, gets KPIs back.
+          </div>
+        </div>
+      </div>
+
+      <div class="conn">
+        <div class="conn-num" style="background:var(--green-dim);color:var(--green)">9</div>
+        <div class="conn-body">
+          <div class="conn-title">GenAIEval → Agent<span class="proto">HTTP :9999</span></div>
+          <div class="conn-sub">Benchmark harness. Fires test queries, measures latency & RAGAS score.</div>
+        </div>
+      </div>
+
+      <div class="conn">
+        <div class="conn-num" style="background:var(--blue-dim);color:var(--blue)">10</div>
+        <div class="conn-body">
+          <div class="conn-title">M2 Ingestion → Redis (one-time)<span class="proto">LAN TCP :6379</span></div>
+          <div class="conn-sub">M2 runs ingestion pipeline once, pushes all 3GPP vectors into your Redis.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════ REAL-LIFE SCENARIO ═══════════════ -->
+  <div class="scenario">
+    <h2>🎬 Real-Life Scenario Walk-Through</h2>
+    <p class="scenario-sub">
+      NOC engineer asks: <strong>"Cell sector gNB-7 is showing high BLER in sector 3. Diagnose and suggest corrective
+        action."</strong>
+    </p>
+    <div class="steps">
+
+      <div class="step">
+        <div class="step-icon" style="background:rgba(45,212,191,0.1);border-color:var(--teal)">🧑</div>
+        <div class="step-content">
+          <div class="step-actor" style="color:var(--teal)">Engineer → Streamlit UI (localhost:8501)</div>
+          <div class="step-msg">Types the query and hits Enter.</div>
+          <div class="step-detail">Nothing has happened yet. This is just your browser talking to a local container.
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-icon" style="background:rgba(99,102,241,0.1);border-color:#818cf8">⚡</div>
+        <div class="step-content">
+          <div class="step-actor" style="color:#818cf8">UI → Gateway (Docker bridge) → Agent</div>
+          <div class="step-msg">Query is forwarded inside Docker. Gateway logs the request, checks rate limit, passes to
+            Agent.</div>
+          <div class="step-payload">POST /v1/chat {"query": "Cell gNB-7 sector 3 high BLER, diagnose"}</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-icon" style="background:var(--blue-dim);border-color:var(--blue)">🧠</div>
+        <div class="step-content">
+          <div class="step-actor" style="color:var(--blue)">Agent → vLLM on Member 2's machine (LAN)</div>
+          <div class="step-msg">Agent sends the query to the LLM. LLM decides: <em>"I need simulation data AND 3GPP spec
+              context to answer this."</em></div>
+          <div class="step-payload">→ tool_call: simulate_network(gNB="gNB-7", sector=3, scenario="bler_stress")
+            → tool_call: rag_retrieve(query="BLER threshold remediation 5G NR TS 38.321")</div>
+          <div class="step-detail">Both tool calls can fire in parallel — agent doesn't wait for one before starting the
+            other.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-icon" style="background:var(--orange-dim);border-color:var(--orange)">🔬</div>
+        <div class="step-content">
+          <div class="step-actor" style="color:var(--orange)">Agent → FastAPI/Simu5G on Member 1's machine (LAN)</div>
+          <div class="step-msg">Simulation runs for ~10s. OMNeT++ spins up the gNB-7 sector 3 scenario headlessly.</div>
+          <div class="step-payload">POST http://M1_IP:8888/simulate
+            {"gnb": "gNB-7", "sector": 3, "scenario": "bler_stress", "duration_s": 10}
+
+            ← {"bler": 0.18, "sinr_db": 4.2, "prb_util": 0.91, "handover_fail": 3}</div>
+          <div class="step-detail">BLER=0.18 (18%) is way above the 2% threshold. PRB utilisation at 91% — cell is
+            overloaded.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-icon" style="background:rgba(244,114,182,0.1);border-color:#f472b6">🔡</div>
+        <div class="step-content">
+          <div class="step-actor" style="color:#f472b6">Agent → TEI Embedding → Redis → TEI Reranker (all Docker)</div>
+          <div class="step-msg">Query is vectorised → Redis returns top-10 chunks from 3GPP TS 38.321 and O-RAN WG3
+            specs → Reranker keeps top-3.</div>
+          <div class="step-payload">chunks returned:
+            [1] TS 38.321 §6.1.3 — HARQ retransmission limits and BLER targets
+            [2] O-RAN WG3 E2SM-KPM v3 — PRB utilisation thresholds
+            [3] TS 38.300 §15.2 — Load balancing triggers for NR</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-icon" style="background:var(--blue-dim);border-color:var(--blue)">🧠</div>
+        <div class="step-content">
+          <div class="step-actor" style="color:var(--blue)">Agent → vLLM again — synthesis call (LAN)</div>
+          <div class="step-msg">Agent sends both tool outputs back to the LLM: <em>"Here are the sim KPIs + spec chunks.
+              Now give the diagnosis."</em></div>
+          <div class="step-payload">system: You are a 5G network operations expert.
+            tool_result[simulate]: {"bler": 0.18, "sinr_db": 4.2, "prb_util": 0.91}
+            tool_result[rag]: [TS38.321 §6.1.3], [O-RAN WG3 E2SM], [TS38.300 §15.2]
+            → synthesise diagnosis + corrective actions</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-icon" style="background:var(--teal-dim);border-color:var(--teal)">📋</div>
+        <div class="step-content">
+          <div class="step-actor" style="color:var(--teal)">LLM → Agent → Gateway → UI → Engineer's screen</div>
+          <div class="step-msg">Final answer streams back to the browser. The engineer sees a structured diagnosis.
+          </div>
+          <div class="step-payload">DIAGNOSIS: gNB-7 Sector 3 — Cell Overload + Poor SINR
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            • BLER 18% (threshold: 2%) — per TS 38.321 §6.1.3
+            • PRB utilisation 91% → insufficient free resources for HARQ retx
+            • SINR 4.2 dB indicates inter-cell interference likely
+
+            RECOMMENDED ACTIONS:
+            1. Trigger inter-frequency load balancing (TS 38.300 §15.2)
+            2. Reduce MCS index to improve link robustness in high-interference zone
+            3. Activate MLB xApp via O-RAN near-RT RIC to redistribute UEs</div>
+          <div class="step-detail">Entire round trip: ~12–15 seconds. Sim dominates (10s). LLM calls ~1–2s each.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════ NOTES ═══════════════ -->
+  <div class="net-note">
+    <div class="note-card">
+      <h3>🐳 Docker Internal Network (ainn-net)</h3>
+      <ul>
+        <li>All 7 containers on M3 machine share one bridge network</li>
+        <li>They address each other by container name: <code>ainn-agent</code>, <code>redis-vector-db</code></li>
+        <li>Nothing on this network is reachable from outside — only <code>:8501</code> is published</li>
+        <li>Defined once in <code>docker-compose.yml</code> under <code>networks: ainn-net:</code></li>
+      </ul>
+    </div>
+    <div class="note-card">
+      <h3>🌐 LAN Cross-Machine Calls</h3>
+      <ul>
+        <li>Only <strong>2 calls</strong> cross the LAN: to M1 (sim) and M2 (LLM)</li>
+        <li>Both configured via <code>.env</code>: <code>SIM_SERVICE_URL</code> and <code>LLM_ENDPOINT_URL</code></li>
+        <li>M1 needs Windows portproxy: WSL IP changes on reboot — fix with a startup script</li>
+        <li>M2's vLLM must bind to <code>0.0.0.0</code>, not <code>127.0.0.1</code>, to be LAN-reachable</li>
+      </ul>
+    </div>
+  </div>
+
+</body>
+
+</html>
