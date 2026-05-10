@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AINN-CoPilot System Architecture</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #161b22;
+      --surface-2: #1c2230;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --teal: #2dd4bf;
+      --teal-dim: #0d9488;
+      --blue: #60a5fa;
+      --blue-dim: #1d4ed8;
+      --orange: #fb923c;
+      --orange-dim: #c2410c;
+      --purple: #c084fc;
+      --purple-dim: #7e22ce;
+      --green: #4ade80;
+      --green-dim: #15803d;
+      --red: #f87171;
+      --yellow: #facc15;
+      --font: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      padding: 40px 24px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--teal);
+      letter-spacing: 0.04em;
+      margin-bottom: 6px;
+      font-family: var(--font);
+    }
+
+    .subtitle {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-bottom: 48px;
+      font-family: var(--font);
+    }
+
+    /* ── Layout ── */
+    .diagram {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    /* ── Zone Labels ── */
+    .zone-row {
+      display: grid;
+      grid-template-columns: 90px 1fr;
+      align-items: stretch;
+      gap: 0;
+    }
+
+    .zone-label {
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      transform: rotate(180deg);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 0;
+      border-right: 2px solid var(--border);
+      margin-right: 20px;
+    }
+
+    .zone-label.user-zone {
+      border-right-color: var(--blue-dim);
+      color: var(--blue);
+    }
+
+    .zone-label.docker-zone {
+      border-right-color: var(--teal-dim);
+      color: var(--teal);
+    }
+
+    .zone-label.member1-zone {
+      border-right-color: var(--orange-dim);
+      color: var(--orange);
+    }
+
+    .zone-label.member2-zone {
+      border-right-color: var(--purple-dim);
+      color: var(--purple);
+    }
+
+    /* ── Rows ── */
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 16px 0;
+      flex-wrap: wrap;
+    }
+
+    .row.multi {
+      justify-content: flex-start;
+      gap: 16px;
+    }
+
+    /* ── Nodes ── */
+    .node {
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      min-width: 130px;
+      position: relative;
+      transition: box-shadow 0.2s;
+    }
+
+    .node:hover {
+      box-shadow: 0 0 20px oklch(from var(--teal) l c h / 0.2);
+    }
+
+    .node .icon {
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .node .label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-align: center;
+      font-family: var(--font);
+    }
+
+    .node .sublabel {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-align: center;
+      font-family: var(--font);
+    }
+
+    .node .port {
+      font-size: 9px;
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: var(--font);
+      color: var(--yellow);
+      margin-top: 2px;
+    }
+
+    /* Node color variants */
+    .node.teal {
+      border-color: var(--teal-dim);
+    }
+
+    .node.teal .label {
+      color: var(--teal);
+    }
+
+    .node.blue {
+      border-color: var(--blue-dim);
+    }
+
+    .node.blue .label {
+      color: var(--blue);
+    }
+
+    .node.orange {
+      border-color: var(--orange-dim);
+    }
+
+    .node.orange .label {
+      color: var(--orange);
+    }
+
+    .node.purple {
+      border-color: var(--purple-dim);
+    }
+
+    .node.purple .label {
+      color: var(--purple);
+    }
+
+    .node.green {
+      border-color: var(--green-dim);
+    }
+
+    .node.green .label {
+      color: var(--green);
+    }
+
+    .node.red {
+      border-color: #7f1d1d;
+    }
+
+    .node.red .label {
+      color: var(--red);
+    }
+
+    .node.yellow {
+      border-color: #713f12;
+    }
+
+    .node.yellow .label {
+      color: var(--yellow);
+    }
+
+    /* ── Grouped containers ── */
+    .group {
+      border: 1.5px dashed var(--border);
+      border-radius: 14px;
+      padding: 16px 20px 20px;
+      position: relative;
+      background: var(--surface);
+    }
+
+    .group-title {
+      position: absolute;
+      top: -11px;
+      left: 16px;
+      background: var(--surface);
+      padding: 0 8px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-family: var(--font);
+    }
+
+    .group.teal-group {
+      border-color: var(--teal-dim);
+      background: #0d1f1f;
+    }
+
+    .group.teal-group .group-title {
+      color: var(--teal);
+      background: #0d1f1f;
+    }
+
+    .group.purple-group {
+      border-color: var(--purple-dim);
+      background: #1a0d2e;
+    }
+
+    .group.purple-group .group-title {
+      color: var(--purple);
+      background: #1a0d2e;
+    }
+
+    .group.orange-group {
+      border-color: var(--orange-dim);
+      background: #1c1008;
+    }
+
+    .group.orange-group .group-title {
+      color: var(--orange);
+      background: #1c1008;
+    }
+
+    .group.blue-group {
+      border-color: var(--blue-dim);
+      background: #0d1b30;
+    }
+
+    .group.blue-group .group-title {
+      color: var(--blue);
+      background: #0d1b30;
+    }
+
+    .group .row {
+      padding: 8px 0 0;
+    }
+
+    /* ── Arrows ── */
+    .arrow-down {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 4px 0;
+    }
+
+    .arrow-down .arrow-line {
+      width: 2px;
+      height: 28px;
+      background: linear-gradient(to bottom, var(--teal-dim), var(--teal));
+    }
+
+    .arrow-down .arrow-head {
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 8px solid var(--teal);
+    }
+
+    .arrow-down .arrow-label {
+      font-size: 9px;
+      color: var(--teal);
+      font-family: var(--font);
+      letter-spacing: 0.05em;
+      margin-top: 3px;
+      background: #0a1a1a;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    .arrow-row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0;
+      padding: 0;
+    }
+
+    /* ── Flow steps ── */
+    .flow-section {
+      margin-bottom: 0;
+    }
+
+    /* ── Legend ── */
+    .legend {
+      max-width: 1100px;
+      margin: 40px auto 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 11px;
+      font-family: var(--font);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── Numbered flow ── */
+    .flow-steps {
+      max-width: 1100px;
+      margin: 32px auto 0;
+    }
+
+    .flow-steps h2 {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-family: var(--font);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 12px;
+    }
+
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      background: var(--teal-dim);
+      color: #000;
+      font-size: 11px;
+      font-weight: 900;
+      font-family: var(--font);
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .step-text {
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--text);
+      font-family: var(--font-sans);
+    }
+
+    .step-text code {
+      font-family: var(--font);
+      font-size: 11px;
+      color: var(--yellow);
+      background: #0d1117;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    .step-text strong {
+      color: var(--teal);
+    }
+
+    /* ── SVG arrows ── */
+    .svg-arrows {
+      width: 100%;
+      overflow: visible;
+    }
+
+    /* ── Main diagram SVG ── */
+    .main-svg-wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      width: 100%;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>AINN-CoPilot — System Architecture</h1>
+  <p class="subtitle">Flow of events · Network topology · Request lifecycle</p>
+
+  <!-- ── Main SVG diagram ── -->
+  <div class="main-svg-wrap">
+    <svg viewBox="0 0 1060 780" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;">
+      <defs>
+        <!-- Arrow markers -->
+        <marker id="arr-teal" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#2dd4bf" />
+        </marker>
+        <marker id="arr-blue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#60a5fa" />
+        </marker>
+        <marker id="arr-orange" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#fb923c" />
+        </marker>
+        <marker id="arr-purple" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#c084fc" />
+        </marker>
+        <marker id="arr-green" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#4ade80" />
+        </marker>
+        <marker id="arr-white" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#8b949e" />
+        </marker>
+
+        <!-- Glow filters -->
+        <filter id="glow-teal">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <filter id="glow-orange">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+
+      <!-- ════════════════════════════════════════════════
+       ZONE BACKGROUNDS
+  ════════════════════════════════════════════════ -->
+
+      <!-- User zone -->
+      <rect x="10" y="10" width="1040" height="90" rx="12" fill="#0d1b30" stroke="#1d4ed8" stroke-width="1.5"
+        stroke-dasharray="6,3" />
+      <text x="26" y="28" font-size="9" fill="#60a5fa" font-family="monospace" font-weight="700" letter-spacing="1">USER
+        / BROWSER</text>
+
+      <!-- Member 3's machine (Docker) zone -->
+      <rect x="10" y="120" width="1040" height="460" rx="12" fill="#0a1a1a" stroke="#0d9488" stroke-width="1.5"
+        stroke-dasharray="6,3" />
+      <text x="26" y="138" font-size="9" fill="#2dd4bf" font-family="monospace" font-weight="700"
+        letter-spacing="1">MACHINE 3 — ALL DOCKER CONTAINERS (192.168.x.x)</text>
+
+      <!-- Member 1 zone -->
+      <rect x="10" y="600" width="490" height="130" rx="12" fill="#1c1008" stroke="#c2410c" stroke-width="1.5"
+        stroke-dasharray="6,3" />
+      <text x="26" y="618" font-size="9" fill="#fb923c" font-family="monospace" font-weight="700"
+        letter-spacing="1">MEMBER 1 MACHINE — WSL2 (bare process, no Docker)</text>
+
+      <!-- Member 2 zone -->
+      <rect x="520" y="600" width="530" height="130" rx="12" fill="#1a0d2e" stroke="#7e22ce" stroke-width="1.5"
+        stroke-dasharray="6,3" />
+      <text x="536" y="618" font-size="9" fill="#c084fc" font-family="monospace" font-weight="700"
+        letter-spacing="1">MEMBER 2 MACHINE — bare process / conda (RTX 5070 Ti)</text>
+
+      <!-- ════════════════════════════════════════════════
+       LAYER 1 — USER
+  ════════════════════════════════════════════════ -->
+
+      <!-- Browser node -->
+      <rect x="420" y="28" width="220" height="58" rx="10" fill="#161b22" stroke="#1d4ed8" stroke-width="1.5" />
+      <text x="530" y="50" text-anchor="middle" font-size="18" fill="#60a5fa">🖥</text>
+      <text x="530" y="66" text-anchor="middle" font-size="11" fill="#60a5fa" font-family="monospace"
+        font-weight="700">Operator Browser</text>
+      <text x="530" y="78" text-anchor="middle" font-size="9" fill="#8b949e"
+        font-family="monospace">http://localhost:8501</text>
+
+      <!-- ════════════════════════════════════════════════
+       LAYER 2 — STREAMLIT UI
+  ════════════════════════════════════════════════ -->
+
+      <!-- Arrow: Browser → UI -->
+      <line x1="530" y1="86" x2="530" y2="148" stroke="#60a5fa" stroke-width="1.5" marker-end="url(#arr-blue)" />
+      <rect x="542" y="106" width="80" height="14" rx="3" fill="#0d1b30" />
+      <text x="582" y="116" text-anchor="middle" font-size="8" fill="#60a5fa" font-family="monospace">HTTP :8501</text>
+
+      <!-- Streamlit UI container -->
+      <rect x="380" y="152" width="300" height="72" rx="10" fill="#161b22" stroke="#2dd4bf" stroke-width="2"
+        filter="url(#glow-teal)" />
+      <text x="530" y="174" text-anchor="middle" font-size="18" fill="#2dd4bf">📡</text>
+      <text x="530" y="192" text-anchor="middle" font-size="12" fill="#2dd4bf" font-family="monospace"
+        font-weight="700">ainn-ui</text>
+      <text x="530" y="206" text-anchor="middle" font-size="9" fill="#8b949e" font-family="monospace">Streamlit · Docker
+        :8501</text>
+      <text x="530" y="218" text-anchor="middle" font-size="9" fill="#facc15" font-family="monospace">container:
+        ainn-ui</text>
+
+      <!-- ════════════════════════════════════════════════
+       LAYER 3 — OPEA AGENT
+  ════════════════════════════════════════════════ -->
+
+      <!-- Arrow: UI → Agent -->
+      <line x1="530" y1="224" x2="530" y2="268" stroke="#2dd4bf" stroke-width="1.5" marker-end="url(#arr-teal)" />
+      <rect x="542" y="234" width="130" height="14" rx="3" fill="#0d1f1f" />
+      <text x="607" y="244" text-anchor="middle" font-size="8" fill="#2dd4bf" font-family="monospace">POST /v1/chat
+        :9090</text>
+
+      <!-- OPEA Agent container -->
+      <rect x="310" y="272" width="440" height="100" rx="10" fill="#0d1f1f" stroke="#2dd4bf" stroke-width="2"
+        filter="url(#glow-teal)" />
+      <text x="530" y="298" text-anchor="middle" font-size="18" fill="#2dd4bf">🤖</text>
+      <text x="530" y="316" text-anchor="middle" font-size="13" fill="#2dd4bf" font-family="monospace"
+        font-weight="700">ainn-agent (OPEA)</text>
+      <text x="530" y="332" text-anchor="middle" font-size="9" fill="#8b949e" font-family="monospace">opea/agent:latest
+        · ReAct Loop · strategy=react_llama</text>
+      <text x="530" y="346" text-anchor="middle" font-size="9" fill="#facc15" font-family="monospace">container:
+        ainn-agent · port 9090</text>
+      <text x="530" y="360" text-anchor="middle" font-size="9" fill="#8b949e" font-family="monospace">tools/ mounted as
+        volume → ainn_tools.yaml + tools.py</text>
+
+      <!-- ════════════════════════════════════════════════
+       LAYER 4 — TOOL CALLS (fork)
+  ════════════════════════════════════════════════ -->
+
+      <!-- Arrow Agent → RAG -->
+      <path d="M 430 372 L 230 410 L 230 446" stroke="#c084fc" stroke-width="1.5" fill="none"
+        marker-end="url(#arr-purple)" stroke-dasharray="5,3" />
+      <rect x="270" y="386" width="100" height="14" rx="3" fill="#1a0d2e" />
+      <text x="320" y="396" text-anchor="middle" font-size="8" fill="#c084fc" font-family="monospace">rag_retrieve
+        tool</text>
+
+      <!-- Arrow Agent → vLLM -->
+      <path d="M 680 372 L 870 410 L 870 605" stroke="#c084fc" stroke-width="1.5" fill="none"
+        marker-end="url(#arr-purple)" stroke-dasharray="5,3" />
+      <rect x="800" y="390" width="130" height="14" rx="3" fill="#1a0d2e" />
+      <text x="865" y="400" text-anchor="middle" font-size="8" fill="#c084fc" font-family="monospace">LLM inference
+        :8080</text>
+
+      <!-- Arrow Agent → Simulation -->
+      <path d="M 450 372 L 260 420 L 260 605" stroke="#fb923c" stroke-width="1.5" fill="none"
+        marker-end="url(#arr-orange)" stroke-dasharray="5,3" />
+      <rect x="150" y="390" width="130" height="14" rx="3" fill="#1c1008" />
+      <text x="215" y="400" text-anchor="middle" font-size="8" fill="#fb923c" font-family="monospace">run_simulation
+        tool</text>
+
+      <!-- ════════════════════════════════════════════════
+       LAYER 5 — RAG STACK (inside Docker)
+  ════════════════════════════════════════════════ -->
+
+      <!-- RAG group background -->
+      <rect x="22" y="446" width="580" height="130" rx="10" fill="#110d1e" stroke="#7e22ce" stroke-width="1.5"
+        stroke-dasharray="4,3" />
+      <text x="36" y="462" font-size="9" fill="#c084fc" font-family="monospace" font-weight="700" letter-spacing="1">RAG
+        MICROSERVICE STACK (all Docker containers, machine 3)</text>
+
+      <!-- RAG Retrieval -->
+      <rect x="34" y="470" width="140" height="90" rx="8" fill="#1a0d2e" stroke="#7e22ce" stroke-width="1.5" />
+      <text x="104" y="494" text-anchor="middle" font-size="14">📚</text>
+      <text x="104" y="510" text-anchor="middle" font-size="10" fill="#c084fc" font-family="monospace"
+        font-weight="700">rag-retrieval</text>
+      <text x="104" y="524" text-anchor="middle" font-size="8" fill="#8b949e"
+        font-family="monospace">opea/retriever</text>
+      <text x="104" y="538" text-anchor="middle" font-size="8" fill="#facc15" font-family="monospace">:8889→7000</text>
+      <text x="104" y="552" text-anchor="middle" font-size="8" fill="#8b949e"
+        font-family="monospace">ainn-retrieval</text>
+
+      <!-- Arrow: RAG → Embedding -->
+      <line x1="174" y1="515" x2="204" y2="515" stroke="#c084fc" stroke-width="1.5" marker-end="url(#arr-purple)" />
+
+      <!-- TEI Embedding -->
+      <rect x="204" y="470" width="130" height="90" rx="8" fill="#1a0d2e" stroke="#7e22ce" stroke-width="1.5" />
+      <text x="269" y="494" text-anchor="middle" font-size="14">🔢</text>
+      <text x="269" y="510" text-anchor="middle" font-size="10" fill="#c084fc" font-family="monospace"
+        font-weight="700">tei-embedding</text>
+      <text x="269" y="524" text-anchor="middle" font-size="8" fill="#8b949e"
+        font-family="monospace">bge-base-en-v1.5</text>
+      <text x="269" y="538" text-anchor="middle" font-size="8" fill="#facc15" font-family="monospace">:6006</text>
+
+      <!-- Arrow: Embedding → Reranker -->
+      <line x1="334" y1="515" x2="364" y2="515" stroke="#c084fc" stroke-width="1.5" marker-end="url(#arr-purple)" />
+
+      <!-- TEI Reranker -->
+      <rect x="364" y="470" width="130" height="90" rx="8" fill="#1a0d2e" stroke="#7e22ce" stroke-width="1.5" />
+      <text x="429" y="494" text-anchor="middle" font-size="14">🎯</text>
+      <text x="429" y="510" text-anchor="middle" font-size="10" fill="#c084fc" font-family="monospace"
+        font-weight="700">tei-reranker</text>
+      <text x="429" y="524" text-anchor="middle" font-size="8" fill="#8b949e"
+        font-family="monospace">bge-reranker-base</text>
+      <text x="429" y="538" text-anchor="middle" font-size="8" fill="#facc15" font-family="monospace">:8808</text>
+
+      <!-- Arrow: Reranker → Redis -->
+      <line x1="494" y1="515" x2="524" y2="515" stroke="#c084fc" stroke-width="1.5" marker-end="url(#arr-purple)" />
+
+      <!-- Redis -->
+      <rect x="524" y="470" width="65" height="90" rx="8" fill="#1a0d2e" stroke="#7e22ce" stroke-width="1.5" />
+      <text x="556" y="494" text-anchor="middle" font-size="14">🗄</text>
+      <text x="556" y="510" text-anchor="middle" font-size="10" fill="#c084fc" font-family="monospace"
+        font-weight="700">Redis</text>
+      <text x="556" y="524" text-anchor="middle" font-size="8" fill="#8b949e" font-family="monospace">VectorDB</text>
+      <text x="556" y="538" text-anchor="middle" font-size="8" fill="#facc15" font-family="monospace">:6379</text>
+      <text x="556" y="552" text-anchor="middle" font-size="8" fill="#8b949e" font-family="monospace">ainn-redis</text>
+
+      <!-- ════════════════════════════════════════════════
+       MEMBER 1 — WSL Simu5G
+  ════════════════════════════════════════════════ -->
+
+      <rect x="34" y="624" width="440" height="88" rx="8" fill="#2a1400" stroke="#c2410c" stroke-width="1.5" />
+      <text x="254" y="650" text-anchor="middle" font-size="20">📶</text>
+      <text x="254" y="670" text-anchor="middle" font-size="12" fill="#fb923c" font-family="monospace"
+        font-weight="700">Simu5G FastAPI Wrapper</text>
+      <text x="254" y="686" text-anchor="middle" font-size="9" fill="#8b949e" font-family="monospace">OMNeT++ · Simu5G ·
+        WSL2 · Python FastAPI</text>
+      <text x="254" y="700" text-anchor="middle" font-size="9" fill="#facc15" font-family="monospace">POST /simulate ·
+        :8888 → Windows portproxy → LAN</text>
+
+      <!-- ════════════════════════════════════════════════
+       MEMBER 2 — vLLM
+  ════════════════════════════════════════════════ -->
+
+      <rect x="536" y="624" width="490" height="88" rx="8" fill="#1a0d2e" stroke="#7e22ce" stroke-width="1.5" />
+      <text x="781" y="650" text-anchor="middle" font-size="20">🧠</text>
+      <text x="781" y="670" text-anchor="middle" font-size="12" fill="#c084fc" font-family="monospace"
+        font-weight="700">vLLM Inference Server</text>
+      <text x="781" y="686" text-anchor="middle" font-size="9" fill="#8b949e"
+        font-family="monospace">meta-llama/Meta-Llama-3-8B-Instruct · RTX 5070 Ti · 12GB VRAM</text>
+      <text x="781" y="700" text-anchor="middle" font-size="9" fill="#facc15" font-family="monospace">OpenAI-compatible
+        API · :8080/v1/chat/completions</text>
+
+      <!-- ════════════════════════════════════════════════
+       RETURN ARROWS
+  ════════════════════════════════════════════════ -->
+
+      <!-- vLLM response back to Agent -->
+      <path d="M 840 604 L 840 430 L 690 372" stroke="#c084fc" stroke-width="1" fill="none"
+        marker-end="url(#arr-purple)" stroke-dasharray="3,3" opacity="0.6" />
+
+      <!-- Sim response back to Agent -->
+      <path d="M 300 604 L 300 420 L 470 372" stroke="#fb923c" stroke-width="1" fill="none"
+        marker-end="url(#arr-orange)" stroke-dasharray="3,3" opacity="0.6" />
+
+      <!-- RAG response back to Agent -->
+      <path d="M 104 446 L 104 400 L 500 372" stroke="#c084fc" stroke-width="1" fill="none"
+        marker-end="url(#arr-purple)" stroke-dasharray="3,3" opacity="0.6" />
+
+      <!-- Final answer: Agent → UI -->
+      <path d="M 600 272 L 600 240 L 570 224" stroke="#2dd4bf" stroke-width="1.5" fill="none"
+        marker-end="url(#arr-teal)" stroke-dasharray="4,2" opacity="0.7" />
+
+      <!-- ════════════════════════════════════════════════
+       LABELS
+  ════════════════════════════════════════════════ -->
+
+      <!-- Step numbers -->
+      <circle cx="530" cy="110" r="9" fill="#2dd4bf" />
+      <text x="530" y="114" text-anchor="middle" font-size="9" fill="#000" font-family="monospace"
+        font-weight="900">1</text>
+
+      <circle cx="530" cy="248" r="9" fill="#2dd4bf" />
+      <text x="530" y="252" text-anchor="middle" font-size="9" fill="#000" font-family="monospace"
+        font-weight="900">2</text>
+
+      <circle cx="320" cy="390" r="9" fill="#c084fc" />
+      <text x="320" y="394" text-anchor="middle" font-size="9" fill="#000" font-family="monospace"
+        font-weight="900">3</text>
+
+      <circle cx="740" cy="390" r="9" fill="#c084fc" />
+      <text x="740" y="394" text-anchor="middle" font-size="9" fill="#000" font-family="monospace"
+        font-weight="900">4</text>
+
+      <circle cx="190" cy="390" r="9" fill="#fb923c" />
+      <text x="190" y="394" text-anchor="middle" font-size="9" fill="#000" font-family="monospace"
+        font-weight="900">5</text>
+
+      <!-- Network label -->
+      <rect x="580" y="564" width="200" height="20" rx="4" fill="#111" />
+      <text x="680" y="576" text-anchor="middle" font-size="8" fill="#8b949e" font-family="monospace">── LAN
+        (192.168.x.x / same Wi-Fi) ──</text>
+
+    </svg>
+  </div>
+
+  <!-- ── Flow Steps ── -->
+  <div class="flow-steps">
+    <h2>Request Lifecycle — Step by Step</h2>
+    <div class="steps-grid">
+
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">
+          <strong>Operator types a query</strong> in the browser at <code>localhost:8501</code>. Streamlit UI
+          (<code>ainn-ui</code> container) receives it and opens a streaming HTTP POST to the agent at
+          <code>ainn-agent:9090</code> inside the Docker network.
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">
+          <strong>OPEA Agent receives the query</strong> and starts the <strong>ReAct reasoning loop</strong>. It reads
+          <code>ainn_tools.yaml</code> (mounted volume) to know what tools exist. It then calls the vLLM endpoint on
+          Member 2's machine to decide: which tool should I call first?
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">
+          If the LLM decides to <strong>retrieve knowledge</strong>, the agent calls <code>call_rag(query)</code> in
+          <code>tools.py</code>. This hits <code>rag-retrieval:7000</code> → TEI Embedding → TEI Reranker → Redis
+          VectorDB. All inside Docker on machine 3.
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text">
+          The agent uses the <strong>LLM on Member 2's machine</strong> (<code>vllm:8080</code>) repeatedly throughout
+          the ReAct loop — to think, to form tool arguments, and to synthesise the final answer. All LLM calls cross the
+          LAN.
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-text">
+          If the LLM decides to <strong>run a simulation</strong>, the agent calls
+          <code>call_simulation(scenario, ue_count)</code>. This sends a POST to Member 1's FastAPI wrapper at
+          <code>M1_IP:8888/simulate</code> over the LAN (via Windows portproxy from WSL).
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-text">
+          <strong>Simu5G runs the OMNeT++ scenario</strong> in WSL on Member 1's machine and returns JSON KPIs:
+          throughput, latency, SINR, packet loss, handover count. The agent receives this as a tool observation.
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">7</div>
+        <div class="step-text">
+          The agent may call <strong>multiple tools in sequence</strong> — simulate first, then RAG to back the
+          diagnosis with standards. Each tool call is another LLM round-trip to Member 2. The loop continues until the
+          LLM outputs a final answer.
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">8</div>
+        <div class="step-text">
+          The <strong>final answer streams back</strong> to the UI via SSE (Server-Sent Events). The Streamlit UI shows
+          tool call indicators (<em>🔬 Running Simu5G...</em>) in real time, then renders the complete diagnosis with
+          citations.
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Legend ── -->
+  <div class="legend">
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#2dd4bf"></div>
+      <span style="color:#2dd4bf">Machine 3 containers (Docker)</span> — UI, Agent, RAG stack, Redis
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#fb923c"></div>
+      <span style="color:#fb923c">Member 1 (WSL)</span> — Simu5G + FastAPI, no Docker needed
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#c084fc"></div>
+      <span style="color:#c084fc">Member 2 (bare)</span> — vLLM server, RTX 5070 Ti GPU
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#60a5fa"></div>
+      <span style="color:#60a5fa">User Browser</span> — connects to Streamlit on machine 3
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#facc15"></div>
+      <span style="color:#facc15">Port numbers</span> — shown on each container/service
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#8b949e"></div>
+      <span style="color:#8b949e">Dashed arrows</span> — return / response paths
+    </div>
+  </div>
+
+</body>
+
+</html>
