@@ -1,0 +1,3 @@
+#!/bin/bash
+source /opt/omnetpp-6.0/setenv
+exec /opt/omnetpp-6.0/bin/opp_run "$@"
