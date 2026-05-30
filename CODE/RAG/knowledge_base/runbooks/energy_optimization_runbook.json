@@ -1,0 +1,6 @@
+{
+  "title": "Energy Optimization Runbook",
+  "source": "synthetic-runbook",
+  "section": "energy_optimization",
+  "text": "Energy optimization in RAN clusters should preserve QoS while reducing transmit power or placing low-load sectors into sleep states. Validate the change with before/after KPIs: throughput, latency, packet loss, SINR, and handover success. Avoid deep sleep on sectors with active mobility hotspots or poor neighbor coverage."
+}
