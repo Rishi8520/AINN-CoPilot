@@ -1,0 +1,6 @@
+{
+  "title": "Interference and Hotspot Runbook",
+  "source": "synthetic-runbook",
+  "section": "interference_hotspot",
+  "text": "Throughput degradation with low SINR and high PRB utilization suggests interference or hotspot overload. Recommended checks: inspect co-channel interference, scheduler pressure, antenna tilt, neighboring cell load, and handover imbalance. Remediation can include load balancing, power tuning, antenna optimization, and slice-specific policy adjustment."
+}
