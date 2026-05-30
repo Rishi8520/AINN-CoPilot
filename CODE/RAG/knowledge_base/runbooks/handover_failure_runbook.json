@@ -1,0 +1,6 @@
+{
+  "title": "Handover Failure Runbook",
+  "source": "synthetic-runbook",
+  "section": "handover_failure",
+  "text": "High handover failure rate is commonly associated with weak coverage overlap, late A3 event triggering, excessive X2 latency, or high UE mobility. Recommended checks: verify neighbor relation tables, reduce A3 offset if triggers are late, lower time-to-trigger for high-speed corridors, inspect X2/backhaul delay, and compare SINR near cell borders."
+}
