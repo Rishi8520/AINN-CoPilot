@@ -31,3 +31,13 @@ async def root_health_check():
         "service": "Telco Mind Simulation Backend",
         "standardization_alignment": "3GPP TS 38.300 / O-RAN WG1"
     }
+
+#Added a second health endpoint at /health since some tools/platforms expect that by convention. 
+# The actual gateway endpoint is /v1/health. 
+@app.get("/health", tags=["Health Check"])
+async def health_check():
+    return {
+        "status": "healthy",
+        "service": "Telco Mind Simulation Backend",
+        "version": "2.0.0"
+    }
