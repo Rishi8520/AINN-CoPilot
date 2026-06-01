@@ -32,7 +32,8 @@ RUN wget https://github.com/inet-framework/inet/releases/download/v4.5.0/inet-4.
     && tar -xzf inet-4.5.0-src.tgz && rm inet-4.5.0-src.tgz && mv inet4.5 inet
 
 # 3. Simu5G
-COPY ./simu5g /opt/simu5g
+#COPY ./simu5g /opt/simu5g
+COPY Simulation/simu5g /opt/simu5g
 
 # =====================================================================
 # STEP 4: Path & Environment Configuration
@@ -52,7 +53,8 @@ RUN cd /opt/omnetpp-6.0 \
 WORKDIR /workspace
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
-COPY ./app ./app
+#COPY ./app ./app
+COPY Simulation/app ./app
 
-EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 7000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7000"]
