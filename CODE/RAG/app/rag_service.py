@@ -45,6 +45,9 @@ def _format_context(query: str, items: list[dict]) -> RetrievalResponse:
             section=item["metadata"].get("section", "unknown"),
             score=round(float(item["score"]), 4),
             text=item["text"],
+            kind=item["metadata"].get("kind"),
+            source_type=item["metadata"].get("source_type"),
+            chunk=item["metadata"].get("chunk"),
         )
         for item in items
     ]

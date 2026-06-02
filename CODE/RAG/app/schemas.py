@@ -19,6 +19,9 @@ class SourceChunk(BaseModel):
     section: str
     score: float
     text: str
+    kind: Optional[str] = None
+    source_type: Optional[str] = None
+    chunk: Optional[int] = None
 
 
 class RetrievalResponse(BaseModel):
