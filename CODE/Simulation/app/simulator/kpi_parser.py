@@ -10,7 +10,7 @@ class KPIParser:
         return {"status": "policy_applied", "sector": target_sector, "policy": policy_type}
 
     @classmethod
-    def parse_scalars(cls, results_dir: str, scenario_name: str) -> dict:
+    def parse_scalars(cls, results_dir: str, scenario_name: str, ue_count: int = 10) -> dict:
         isd = 500
         num_gnbs = 7
         sectors_per_site = 3
@@ -62,7 +62,9 @@ class KPIParser:
                 base_latency += (sleep_count * 0.8)
                 throughput_multiplier *= max(0.7, 1.0 - (sleep_count * 0.04))
 
-        avg_throughput = (115.0 * throughput_multiplier) + random.uniform(-2.0, 2.0)
+        rng = random.Random(f"{scenario_name}:{ue_count}:{len(cls._active_policies)}")
+        load_factor = max(0.3, 1.0 - ((ue_count - 10) * 0.01))
+        avg_throughput = (115.0 * throughput_multiplier * load_factor) + rng.uniform(-2.0, 2.0)
 
         return {
             "cluster_topology": {
@@ -77,6 +79,7 @@ class KPIParser:
                 "packet_loss_percent": round(packet_loss, 2),
                 "sinr_db": round(avg_sinr, 1),
                 "handover_success_rate": round(ho_success_rate, 2),
+                "handover_count": int((1.0 - ho_success_rate) * ue_count * 10),
                 "energy_saved_percent": round(energy_saved, 1)
             },
             "sector_prb_matrix": prb_utilization
