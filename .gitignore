@@ -2,3 +2,6 @@
 CODE/.venv/
 __pycache__/
 *.py[cod]
+
+# RAG local vector database storage
+CODE/RAG/storage/
