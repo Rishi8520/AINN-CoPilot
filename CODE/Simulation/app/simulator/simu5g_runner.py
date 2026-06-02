@@ -20,13 +20,15 @@ class Simu5GRunner:
     def run(self, scenario_name: str, ue_count: int) -> dict:
         results_dir = "/workspace/app/results"
         os.makedirs(results_dir, exist_ok=True)
-        
+    #OMNeT++ should be launched against the .ini config, not directly against the .ned file.
         cmd = [
             self.opp_run_path,
             "-m",
             "-u", "Cmdenv",
+            "-f", "/workspace/app/scenarios/omnetpp.ini",
             "-c", scenario_name,
-            "/workspace/app/scenarios/TelcoMindNetwork.ned"
+            "--result-dir=/workspace/app/results",
+            f"--*.numUe={ue_count}",
         ]
         
         print(f"[Runner] Executing Simu5G Core Layer: {' '.join(cmd)}")
@@ -43,4 +45,5 @@ class Simu5GRunner:
             print(f"[Runner Anomaly] Unexpected thread event: {e}")
             print("[Runner] Dropping down safely to resilient 3GPP digital twin physical baselines.")
             
-        return KPIParser.parse_scalars(results_dir, scenario_name)
+        parsed = KPIParser.parse_scalars(results_dir, scenario_name, ue_count)
+        return parsed
