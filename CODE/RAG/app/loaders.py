@@ -22,6 +22,8 @@ def load_pdf(path: Path) -> list[Chunk]:
                         "section": f"page {page_index}",
                         "chunk": chunk_index,
                         "kind": "pdf",
+                        "source_type": "spec",
+                        "page": page_index,
                     },
                 )
             )
