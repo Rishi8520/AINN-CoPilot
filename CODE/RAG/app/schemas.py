@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -22,6 +22,36 @@ class SourceChunk(BaseModel):
     kind: Optional[str] = None
     source_type: Optional[str] = None
     chunk: Optional[int] = None
+    page: Optional[int] = None
+
+
+class SynthesisCitation(BaseModel):
+    source: str
+    title: str
+    section: str
+    chunk: Optional[int] = None
+    page: Optional[int] = None
+    kind: Optional[str] = None
+    source_type: Optional[str] = None
+    score: float
+
+
+class SynthesisRequest(BaseModel):
+    query: str
+    top_k: Optional[int] = Field(default=None, ge=1, le=20)
+    contexts: Optional[list[SourceChunk]] = None
+    simulation_kpis: Optional[dict[str, Any]] = None
+    intent_type: Optional[str] = None
+
+
+class SynthesisResponse(BaseModel):
+    query: str
+    answer: str
+    confidence: Literal["high", "medium", "low"]
+    citations: list[SynthesisCitation]
+    assumptions: list[str]
+    recommended_action: str
+    used_simulation_kpis: Optional[dict[str, Any]] = None
 
 
 class RetrievalResponse(BaseModel):

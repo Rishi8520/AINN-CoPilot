@@ -1,7 +1,15 @@
 from fastapi import FastAPI, HTTPException
 from app import config
 from app.loaders import load_knowledge_base
-from app.schemas import IngestResponse, RetrievalRequest, RetrievalResponse, SourceChunk
+from app.schemas import (
+    IngestResponse,
+    RetrievalRequest,
+    RetrievalResponse,
+    SourceChunk,
+    SynthesisRequest,
+    SynthesisResponse,
+)
+from app.synthesis import synthesize_response
 from app.vector_store import TelcoVectorStore
 
 app = FastAPI(
@@ -48,6 +56,7 @@ def _format_context(query: str, items: list[dict]) -> RetrievalResponse:
             kind=item["metadata"].get("kind"),
             source_type=item["metadata"].get("source_type"),
             chunk=item["metadata"].get("chunk"),
+            page=item["metadata"].get("page"),
         )
         for item in items
     ]
@@ -75,6 +84,25 @@ async def retrieve(req: RetrievalRequest):
     if not query:
         raise HTTPException(status_code=400, detail="Missing query/text")
     return _format_context(query, store.search(query, req.top_k))
+
+
+@app.post("/synthesize", response_model=SynthesisResponse)
+async def synthesize(req: SynthesisRequest):
+    query = req.query.strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="Missing query")
+
+    if req.contexts is not None:
+        sources = req.contexts
+    else:
+        sources = _format_context(query, store.search(query, req.top_k)).sources
+
+    return synthesize_response(
+        query=query,
+        sources=sources,
+        simulation_kpis=req.simulation_kpis,
+        intent_type=req.intent_type,
+    )
 
 
 @app.post("/v1/retrievaltool")
