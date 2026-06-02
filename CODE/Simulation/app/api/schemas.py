@@ -1,10 +1,16 @@
 from pydantic import BaseModel, Field
-from typing import Optional
-
+from typing import Optional, Literal
 class SimulationRequest(BaseModel):
-    scenario: str = Field(..., description="Must be 'normal_operation', 'handover_failure', or 'energy_optimization'")
-    ue_count: int = Field(default=10, ge=1, le=50, description="Number of User Equipments to simulate")
-
+    scenario: str = Field(
+        ...,
+        description="Scenario name or alias: normal_operation, handover_failure, energy_optimization, hotspot_traffic_burst"
+    )
+    ue_count: int = Field(default=10, ge=1, le=100)
+    cell_id: Optional[int] = Field(default=0)
+    slice_type: Literal["eMBB", "URLLC", "mMTC"] = "eMBB"
+class PolicyRequest(BaseModel):
+    sector_id: str
+    policy_type: Literal["deep_sleep", "power_trim", "normal"]
 class KPIMetrics(BaseModel):
     throughput_mbps: float = Field(..., description="Mean downstream throughput received by UEs")
     latency_ms: float = Field(..., description="Mean end-to-end network latency")
@@ -15,7 +21,9 @@ class KPIMetrics(BaseModel):
 
 class SimulationResponse(BaseModel):
     status: str
+    requested_scenario: str
     scenario: str
     ue_count: int
-    cached: bool
-    metrics: KPIMetrics
+    cell_id: int
+    slice_type: str
+    data: dict
