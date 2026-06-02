@@ -1,74 +1,34 @@
-# TelcoMind Member 2: RAG + LLM
+# TelcoMind Member 2: RAG & Knowledge
 
-This folder is for Member 2's machine. It exposes:
+This service provides the TelcoMind Retrieval-Augmented Generation (RAG)
+knowledge layer. It indexes local runbooks, scenario markdown, and official
+specification PDFs, then exposes retrieval and synthesis endpoints for the
+Agent, UI, and teammate demos.
 
-- RAG retrieval API on `:7000`
-- vLLM OpenAI-compatible API on `:8080`
+Current status:
 
-Member 3's Agent should call these over Tailscale:
+- Runs locally on port `7001`.
+- `/health` reports service readiness.
+- `/ingest` indexes runbooks, scenarios, and PDFs under `knowledge_base/specs/`.
+- `/v1/retrievaltool` returns Agent-compatible plain text.
+- `/v1/retrievaltool/json` returns citation-ready JSON.
+- `/synthesize` returns structured synthesis with answer, confidence,
+  citations, assumptions, recommended action, KPI usage, intent type, and
+  retrieval context count.
 
-```env
-RAG_SERVICE_URL=http://member2-tailscale-name:7000
-RAG_HEALTH_PATH=/health
-LLM_ENDPOINT_URL=http://member2-tailscale-name:8080
-```
+## Local Startup
 
-## Hardware Target
-
-Member 2 has RTX 5070 Ti, 12 GB VRAM, 32 GB RAM, Intel Core Ultra 9 275 HX.
-
-The default LLM is `Qwen/Qwen2.5-7B-Instruct`, which is a practical 7B-class
-model for a 12 GB GPU. If vLLM fails due to memory, reduce `--max-model-len` in
-`docker-compose.yml` or choose a smaller instruct model.
-
-## First Run
+Use CPU mode for the current local setup:
 
 ```bash
 cd CODE/RAG
-cp .env.example .env
-docker compose up -d --build rag-service
+RAG_DEVICE=cpu ../.venv/bin/uvicorn app.rag_service:app --host 0.0.0.0 --port 7001
 ```
 
-Put PDFs in:
-
-```text
-knowledge_base/specs/
-```
-
-Run ingestion:
-
-```bash
-curl -X POST http://localhost:7000/ingest
-```
-
-Test retrieval:
-
-```bash
-curl -X POST http://localhost:7000/v1/retrievaltool \
-  -H "Content-Type: application/json" \
-  -d '{"text":"What causes handover failures in 5G NR?"}'
-```
-
-Start vLLM:
-
-```bash
-docker compose up -d vllm
-```
-
-Test vLLM:
-
-```bash
-curl http://localhost:8080/v1/models
-```
-
-## Tailscale Test From Member 3
-
-From Rishi's machine:
-
-```bash
-curl http://member2-tailscale-name:7000/health
-curl http://member2-tailscale-name:8080/v1/models
-```
+`RAG_DEVICE=cpu` is currently recommended because the RTX 5070 Ti requires
+`sm_120` support, and the current PyTorch setup is not compatible with that GPU
+target yet. GPU optimization can be added later after a compatible PyTorch/vLLM
+stack is available.
 
 ## Endpoints
 
@@ -76,9 +36,117 @@ curl http://member2-tailscale-name:8080/v1/models
 - `POST /ingest`
 - `POST /retrieve`
 - `POST /v1/retrievaltool`
+- `POST /v1/retrievaltool/json`
+- `POST /synthesize`
 
-`/v1/retrievaltool` is compatible with the existing Agent tool code, which sends:
+## Curl Examples
 
-```json
-{"text": "query here"}
+Health:
+
+```bash
+curl http://localhost:7001/health
 ```
+
+Ingest knowledge base:
+
+```bash
+curl -X POST http://localhost:7001/ingest
+```
+
+Agent-compatible plain-text retrieval:
+
+```bash
+curl -X POST http://localhost:7001/v1/retrievaltool \
+  -H "Content-Type: application/json" \
+  -d '{"text":"What causes handover failures in 5G NR?"}'
+```
+
+Citation-ready JSON retrieval:
+
+```bash
+curl -X POST http://localhost:7001/v1/retrievaltool/json \
+  -H "Content-Type: application/json" \
+  -d '{"text":"What causes handover failures in 5G NR?"}'
+```
+
+Synthesis without simulation KPIs:
+
+```bash
+curl -X POST http://localhost:7001/synthesize \
+  -H "Content-Type: application/json" \
+  -d '{"query":"How should we troubleshoot high latency in a 5G cell?"}'
+```
+
+Synthesis with simulation KPIs:
+
+```bash
+curl -X POST http://localhost:7001/synthesize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query":"Why is this cell showing poor handover performance?",
+    "simulation_kpis":{
+      "handover_success_rate":0.82,
+      "average_latency_ms":38.5,
+      "packet_loss_rate":0.018
+    }
+  }'
+```
+
+## Agent Integration Contract
+
+Set the Agent service URL to the RAG host and port:
+
+```env
+RAG_SERVICE_URL=http://<host>:7001
+```
+
+Agent tool calls should use:
+
+```text
+POST /v1/retrievaltool
+```
+
+This endpoint returns plain text that is compatible with the existing Agent
+tooling. UI and synthesis workflows can use `/v1/retrievaltool/json` for
+citation-ready retrieval or `/synthesize` for structured answers.
+
+## Knowledge Base Layout
+
+```text
+CODE/RAG/knowledge_base/
+  runbooks/
+  scenarios/
+  specs/
+```
+
+Put official standards PDFs in:
+
+```text
+CODE/RAG/knowledge_base/specs/
+```
+
+Then run `/ingest` again.
+
+## Tests
+
+Run these from WSL or a compatible Linux shell:
+
+```bash
+cd CODE
+source .venv/bin/activate
+python -m compileall RAG
+pytest RAG/tests -q
+```
+
+Demo queries live at:
+
+```text
+CODE/RAG/eval/rag_demo_queries.json
+```
+
+## Known Limitations
+
+- Synthesis currently uses a deterministic fallback, not full LLM synthesis yet.
+- Local Chroma storage is ignored by git.
+- GPU is disabled until a compatible PyTorch/vLLM setup is available.
+- Official standards PDFs must be added separately.
