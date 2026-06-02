@@ -6,6 +6,11 @@ from app import config
 from app.chunking import Chunk
 
 
+def _batch_slices(total: int, batch_size: int):
+    for start in range(0, total, batch_size):
+        yield slice(start, min(start + batch_size, total))
+
+
 class TelcoVectorStore:
     def __init__(self):
         device = self._choose_device()
@@ -31,6 +36,20 @@ class TelcoVectorStore:
     def count(self) -> int:
         return self.collection.count()
 
+    def _upsert_batch_size(self) -> int:
+        configured_batch_size = max(1, config.CHROMA_UPSERT_BATCH_SIZE)
+        get_max_batch_size = getattr(self.client, "get_max_batch_size", None)
+        if callable(get_max_batch_size):
+            try:
+                return max(1, min(configured_batch_size, int(get_max_batch_size())))
+            except Exception:
+                return configured_batch_size
+
+        max_batch_size = getattr(self.client, "max_batch_size", None)
+        if isinstance(max_batch_size, int):
+            return max(1, min(configured_batch_size, max_batch_size))
+        return configured_batch_size
+
     def ingest(self, chunks: list[Chunk]) -> int:
         if not chunks:
             return 0
@@ -53,12 +72,14 @@ class TelcoVectorStore:
             show_progress_bar=True,
         ).tolist()
 
-        self.collection.upsert(
-            ids=ids,
-            documents=texts,
-            embeddings=embeddings,
-            metadatas=metadatas,
-        )
+        upsert_batch_size = self._upsert_batch_size()
+        for batch_slice in _batch_slices(len(ids), upsert_batch_size):
+            self.collection.upsert(
+                ids=ids[batch_slice],
+                documents=texts[batch_slice],
+                embeddings=embeddings[batch_slice],
+                metadatas=metadatas[batch_slice],
+            )
         return len(ids)
 
     def search(self, query: str, top_k: int | None = None) -> list[dict]:
