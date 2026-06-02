@@ -81,3 +81,11 @@ async def opea_retrievaltool(req: RetrievalRequest):
         raise HTTPException(status_code=400, detail="Missing text")
     response = _format_context(query, store.search(query, req.top_k))
     return response.answer_context
+
+
+@app.post("/v1/retrievaltool/json", response_model=RetrievalResponse)
+async def opea_retrievaltool_json(req: RetrievalRequest):
+    query = req.effective_query()
+    if not query:
+        raise HTTPException(status_code=400, detail="Missing text")
+    return _format_context(query, store.search(query, req.top_k))
