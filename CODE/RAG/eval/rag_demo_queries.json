@@ -1,0 +1,50 @@
+[
+  {
+    "intent_type": "DIAGNOSTIC",
+    "query": "Why are handover failures increasing near the stadium sector after the evening traffic surge?",
+    "expected_evidence_type": "mixed",
+    "notes": "Demo query for correlating handover failure symptoms with runbook guidance and scenario evidence."
+  },
+  {
+    "intent_type": "GENERAL_QNA",
+    "query": "What are the common causes of 5G NR handover failure and which counters should be checked first?",
+    "expected_evidence_type": "runbook",
+    "notes": "Baseline operations question that should retrieve handover troubleshooting steps."
+  },
+  {
+    "intent_type": "OPTIMIZATION",
+    "query": "How can we reduce RAN energy consumption overnight without degrading coverage for active users?",
+    "expected_evidence_type": "mixed",
+    "notes": "Energy optimization query that should combine runbook recommendations with scenario constraints."
+  },
+  {
+    "intent_type": "GENERAL_QNA",
+    "query": "What does the energy optimization runbook recommend for low-load cells?",
+    "expected_evidence_type": "runbook",
+    "notes": "Direct knowledge lookup for power-saving actions and guardrails."
+  },
+  {
+    "intent_type": "DIAGNOSTIC",
+    "query": "Users report low throughput and high retransmissions in one sector; could interference be the cause?",
+    "expected_evidence_type": "mixed",
+    "notes": "Interference diagnostic query that should surface symptoms, likely causes, and mitigation evidence."
+  },
+  {
+    "intent_type": "OPTIMIZATION",
+    "query": "Which interference mitigation actions should be prioritized before changing antenna tilt?",
+    "expected_evidence_type": "runbook",
+    "notes": "Optimization-oriented query for recommended action ordering."
+  },
+  {
+    "intent_type": "GENERAL_QNA",
+    "query": "What does normal operation look like for baseline latency, throughput, and handover success?",
+    "expected_evidence_type": "scenario",
+    "notes": "Normal operation query intended to retrieve baseline scenario documentation."
+  },
+  {
+    "intent_type": "DIAGNOSTIC",
+    "query": "The current KPIs look close to baseline, but latency is slightly higher; should we treat this as an incident?",
+    "expected_evidence_type": "mixed",
+    "notes": "Baseline comparison query for distinguishing normal variance from actionable degradation."
+  }
+]
