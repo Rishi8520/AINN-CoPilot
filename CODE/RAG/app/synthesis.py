@@ -21,6 +21,7 @@ def synthesize_response(
     citations = [_citation_from_source(source) for source in selected_sources]
     confidence = _confidence_from_sources(ranked_sources)
     assumptions = _assumptions_from_inputs(selected_sources, simulation_kpis, intent_type)
+    retrieval_context_count = len(ranked_sources)
 
     if not selected_sources:
         return SynthesisResponse(
@@ -36,6 +37,8 @@ def synthesize_response(
                 "Ingest or retrieve more relevant runbook/specification context, then retry synthesis."
             ),
             used_simulation_kpis=simulation_kpis,
+            intent_type=intent_type,
+            retrieval_context_count=retrieval_context_count,
         )
 
     evidence_summary = _evidence_summary(query, selected_sources)
@@ -57,6 +60,8 @@ def synthesize_response(
         assumptions=assumptions,
         recommended_action=_recommended_action(query, selected_sources, simulation_kpis, intent_type),
         used_simulation_kpis=simulation_kpis,
+        intent_type=intent_type,
+        retrieval_context_count=retrieval_context_count,
     )
 
 

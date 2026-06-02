@@ -52,6 +52,8 @@ class SynthesisResponse(BaseModel):
     assumptions: list[str]
     recommended_action: str
     used_simulation_kpis: Optional[dict[str, Any]] = None
+    intent_type: Optional[str] = None
+    retrieval_context_count: int
 
 
 class RetrievalResponse(BaseModel):
