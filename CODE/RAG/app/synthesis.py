@@ -1,6 +1,10 @@
+import json
 import re
+import urllib.error
+import urllib.request
 from typing import Any
 
+from app import config
 from app.schemas import SourceChunk, SynthesisCitation, SynthesisResponse
 
 
@@ -9,6 +13,48 @@ _SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
 
 
 def synthesize_response(
+    query: str,
+    sources: list[SourceChunk],
+    simulation_kpis: dict[str, Any] | None = None,
+    intent_type: str | None = None,
+) -> SynthesisResponse:
+    deterministic_response = _deterministic_synthesis(
+        query=query,
+        sources=sources,
+        simulation_kpis=simulation_kpis,
+        intent_type=intent_type,
+    )
+
+    if not config.LLM_ENABLED or not config.LLM_ENDPOINT_URL.strip():
+        return deterministic_response
+
+    useful_sources = [source for source in sources if source.text.strip()]
+    selected_sources = sorted(useful_sources, key=lambda source: source.score, reverse=True)[:3]
+    try:
+        llm_answer = _call_llm_synthesis(
+            query=query,
+            sources=selected_sources,
+            simulation_kpis=simulation_kpis,
+            intent_type=intent_type,
+        )
+    except (OSError, TimeoutError, ValueError, urllib.error.URLError, urllib.error.HTTPError):
+        llm_answer = ""
+
+    if not llm_answer:
+        assumptions = list(deterministic_response.assumptions)
+        assumptions.append("LLM synthesis was unavailable, so deterministic fallback synthesis was used.")
+        return _copy_response(deterministic_response, assumptions=assumptions)
+
+    return _copy_response(deterministic_response, answer=llm_answer)
+
+
+def _copy_response(response: SynthesisResponse, **updates: Any) -> SynthesisResponse:
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update=updates)
+    return response.copy(update=updates)
+
+
+def _deterministic_synthesis(
     query: str,
     sources: list[SourceChunk],
     simulation_kpis: dict[str, Any] | None = None,
@@ -62,6 +108,100 @@ def synthesize_response(
         used_simulation_kpis=simulation_kpis,
         intent_type=intent_type,
         retrieval_context_count=retrieval_context_count,
+    )
+
+
+def _call_llm_synthesis(
+    query: str,
+    sources: list[SourceChunk],
+    simulation_kpis: dict[str, Any] | None,
+    intent_type: str | None,
+) -> str:
+    endpoint = config.LLM_ENDPOINT_URL.rstrip("/") + "/v1/chat/completions"
+    payload = {
+        "model": config.LLM_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are TelcoMind's RAG synthesis assistant. Answer only from the provided "
+                    "source chunks and supplied simulation KPIs. Do not invent 3GPP or O-RAN "
+                    "clause numbers. Preserve citations using the provided labels such as [1], [2]. "
+                    "If the evidence is insufficient, say so."
+                ),
+            },
+            {
+                "role": "user",
+                "content": _llm_prompt(query, sources, simulation_kpis, intent_type),
+            },
+        ],
+        "temperature": 0.1,
+        "max_tokens": 400,
+    }
+    data = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        endpoint,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with urllib.request.urlopen(request, timeout=config.LLM_TIMEOUT_SECONDS) as response:
+        body = response.read().decode("utf-8")
+    parsed = json.loads(body)
+    choices = parsed.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise ValueError("LLM response did not include choices.")
+    message = choices[0].get("message")
+    if not isinstance(message, dict):
+        raise ValueError("LLM response did not include a message.")
+    answer = message.get("content")
+    if not isinstance(answer, str) or not answer.strip():
+        raise ValueError("LLM response did not include usable content.")
+    return answer.strip()
+
+
+def _llm_prompt(
+    query: str,
+    sources: list[SourceChunk],
+    simulation_kpis: dict[str, Any] | None,
+    intent_type: str | None,
+) -> str:
+    source_blocks = []
+    for index, source in enumerate(sources, start=1):
+        metadata = [
+            f"label=[{index}]",
+            f"id={source.id}",
+            f"title={source.title}",
+            f"section={source.section}",
+            f"source={source.source}",
+        ]
+        if source.chunk is not None:
+            metadata.append(f"chunk={source.chunk}")
+        if source.page is not None:
+            metadata.append(f"page={source.page}")
+        source_blocks.append(
+            "\n".join(
+                [
+                    "Source " + ", ".join(metadata),
+                    source.text.strip(),
+                ]
+            )
+        )
+
+    kpis = json.dumps(simulation_kpis or {}, sort_keys=True)
+    intent = intent_type or "not provided"
+    sources_text = "\n\n".join(source_blocks) if source_blocks else "No useful source chunks were provided."
+    return (
+        f"User query:\n{query}\n\n"
+        f"intent_type:\n{intent}\n\n"
+        f"simulation_kpis:\n{kpis}\n\n"
+        f"Source chunks:\n{sources_text}\n\n"
+        "Instructions:\n"
+        "- Answer only from the provided source chunks and supplied KPIs.\n"
+        "- Preserve citations using the provided labels such as [1], [2].\n"
+        "- Do not invent 3GPP or O-RAN clause numbers.\n"
+        "- If useful evidence is missing, state what is missing instead of guessing."
     )
 
 

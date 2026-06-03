@@ -92,6 +92,61 @@ curl -X POST http://localhost:7001/synthesize \
   }'
 ```
 
+## Optional vLLM Synthesis
+
+By default, `/synthesize` uses deterministic synthesis only. This keeps local
+RAG startup independent from any LLM service:
+
+```env
+LLM_ENABLED=false
+```
+
+To enable OpenAI-compatible vLLM synthesis, start vLLM separately:
+
+```powershell
+docker run --rm --name vllm-inference --gpus all --ipc=host `
+  --ulimit memlock=-1 --ulimit stack=67108864 `
+  -p 8080:8000 `
+  -v $env:USERPROFILE\.cache\huggingface:/root/.cache/huggingface `
+  -e NCCL_P2P_DISABLE=1 `
+  -e CUDA_MODULE_LOADING=LAZY `
+  nvcr.io/nvidia/vllm:26.05.post1-py3 `
+  vllm serve Qwen/Qwen2.5-0.5B-Instruct `
+  --port 8000 `
+  --host 0.0.0.0 `
+  --dtype float16 `
+  --max-model-len 2048 `
+  --max-num-seqs 1 `
+  --enforce-eager `
+  --gpu-memory-utilization 0.60
+```
+
+Then start RAG with LLM synthesis enabled:
+
+```bash
+cd CODE/RAG
+LLM_ENABLED=true \
+LLM_ENDPOINT_URL=http://localhost:8080 \
+LLM_MODEL=Qwen/Qwen2.5-0.5B-Instruct \
+RAG_DEVICE=cpu \
+../.venv/bin/uvicorn app.rag_service:app --host 0.0.0.0 --port 7001
+```
+
+Environment variables:
+
+- `LLM_ENABLED`: defaults to `false`.
+- `LLM_ENDPOINT_URL`: defaults to empty. When enabled, RAG posts to
+  `{LLM_ENDPOINT_URL}/v1/chat/completions`.
+- `LLM_MODEL`: defaults to `Qwen/Qwen2.5-0.5B-Instruct`.
+- `LLM_TIMEOUT_SECONDS`: defaults to `30`.
+
+When vLLM is enabled and returns a usable answer, `/synthesize` uses that text
+as `answer` while preserving deterministic citations, assumptions,
+recommended action, KPI fields, intent type, and retrieval context count. If
+vLLM is offline, times out, returns invalid JSON, or returns no usable answer,
+the API still succeeds with deterministic fallback synthesis and records an
+assumption noting that fallback was used.
+
 ## Agent Integration Contract
 
 Set the Agent service URL to the RAG host and port:
@@ -146,7 +201,8 @@ CODE/RAG/eval/rag_demo_queries.json
 
 ## Known Limitations
 
-- Synthesis currently uses a deterministic fallback, not full LLM synthesis yet.
+- LLM synthesis is optional and depends on an external OpenAI-compatible vLLM
+  endpoint; deterministic fallback remains the default.
 - Local Chroma storage is ignored by git.
 - GPU is disabled until a compatible PyTorch/vLLM setup is available.
 - Official standards PDFs must be added separately.
