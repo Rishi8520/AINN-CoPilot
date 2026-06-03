@@ -26,6 +26,7 @@ from app.vector_store import TelcoVectorStore  # noqa: E402
 
 
 DEMO_QUERY_PATH = RAG_ROOT / "eval" / "rag_demo_queries.json"
+EVAL_NOTES_PATH = RAG_ROOT / "eval" / "rag_eval_notes.md"
 REQUIRED_QUERY_FIELDS = {"intent_type", "query", "expected_evidence_type", "notes"}
 ALLOWED_INTENTS = {"GENERAL_QNA", "DIAGNOSTIC", "OPTIMIZATION"}
 ALLOWED_EVIDENCE_TYPES = {"runbook", "scenario", "spec", "mixed"}
@@ -352,3 +353,42 @@ def test_demo_query_json_exists_parses_and_has_required_fields():
         assert entry["expected_evidence_type"] in ALLOWED_EVIDENCE_TYPES
         assert entry["query"].strip()
         assert entry["notes"].strip()
+
+
+def test_eval_notes_exist_and_cover_rag_quality_handoff_topics():
+    assert EVAL_NOTES_PATH.exists()
+    notes = EVAL_NOTES_PATH.read_text(encoding="utf-8").lower()
+
+    required_terms = [
+        "3gpp",
+        "etsi",
+        "o-ran",
+        "wg1",
+        "runbooks",
+        "scenario",
+        "baai/bge-base-en-v1.5",
+        "chroma",
+        "baai/bge-reranker-base",
+        "top_k",
+        "rerank_top_k",
+        "1400",
+        "220",
+        "deterministic",
+        "citation",
+        "general_qna",
+        "diagnostic",
+        "optimization",
+        "handover",
+        "energy",
+        "interference",
+        "ng-ran",
+        "kpi",
+        "vllm",
+        "7001",
+        "8080",
+        "compileall",
+        "pytest",
+    ]
+
+    for term in required_terms:
+        assert term in notes

@@ -317,6 +317,16 @@ energy optimization, interference or hotspot diagnosis, NG-RAN architecture,
 O-RAN architecture, standards/spec citation retrieval, and simulation
 KPI-aware synthesis.
 
+Lightweight Member 2 RAG quality and evaluation notes live at:
+
+```text
+CODE/RAG/eval/rag_eval_notes.md
+```
+
+These notes summarize corpus coverage, chunking, retrieval/reranking behavior,
+citation readiness, demo query coverage, latency expectations, and manual
+evaluation commands for teammate or judge handoff.
+
 ## Known Limitations
 
 - LLM synthesis is optional and depends on an external OpenAI-compatible vLLM
