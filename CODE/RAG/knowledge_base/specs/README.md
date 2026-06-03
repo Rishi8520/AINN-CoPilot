@@ -15,3 +15,13 @@ Guidance:
 - Do not invent clause references in retrieval content. Add exact section or clause names only when they are present in the source document.
 - Avoid adding vendor marketing material to this folder unless it is explicitly approved as a knowledge source.
 
+## Pending Authorized Sources
+
+- O-RAN WG1 Use Cases / Deployment Scenarios: pending authorized official PDF
+  or source. Add it here when available, then rerun ingestion so RAG can cite it
+  directly.
+
+Current scenario mapping under `knowledge_base/scenarios/` is
+synthetic/project-authored demo grounding. It is useful for simulation-aware RAG
+queries, but it is not a substitute for the official O-RAN WG1 Use Cases /
+Deployment Scenarios document.

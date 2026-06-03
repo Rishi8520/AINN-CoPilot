@@ -304,6 +304,17 @@ Demo queries live at:
 CODE/RAG/eval/rag_demo_queries.json
 ```
 
+The curated demo/eval set contains at least 10 intents covering `GENERAL_QNA`,
+`DIAGNOSTIC`, and `OPTIMIZATION` flows. Coverage includes handover failure,
+energy optimization, interference or hotspot diagnosis, NG-RAN architecture,
+O-RAN architecture, standards/spec citation retrieval, and simulation
+KPI-aware synthesis.
+
+Official O-RAN WG1 Use Cases / Deployment Scenarios coverage is still pending
+an authorized official PDF or source. The current scenario mapping is
+synthetic/project-authored demo grounding and should not be treated as a
+replacement for the official WG1 document.
+
 ## Known Limitations
 
 - LLM synthesis is optional and depends on an external OpenAI-compatible vLLM

@@ -330,16 +330,21 @@ def test_demo_query_json_exists_parses_and_has_required_fields():
     queries = json.loads(DEMO_QUERY_PATH.read_text(encoding="utf-8"))
 
     assert isinstance(queries, list)
-    assert len(queries) >= 8
+    assert len(queries) >= 10
 
     intents = {entry["intent_type"] for entry in queries}
-    joined_queries = " ".join(entry["query"].lower() for entry in queries)
+    joined_queries = " ".join(
+        f"{entry['query']} {entry.get('notes', '')} {entry.get('expected_evidence_type', '')}".lower()
+        for entry in queries
+    )
 
     assert {"GENERAL_QNA", "DIAGNOSTIC", "OPTIMIZATION"}.issubset(intents)
     assert "handover" in joined_queries
     assert "energy" in joined_queries
     assert "interference" in joined_queries
-    assert "baseline" in joined_queries or "normal operation" in joined_queries
+    assert "ng-ran" in joined_queries or "ng ran" in joined_queries
+    assert "o-ran" in joined_queries or "oran" in joined_queries
+    assert "kpi" in joined_queries or "simulation" in joined_queries
 
     for entry in queries:
         assert REQUIRED_QUERY_FIELDS.issubset(entry)

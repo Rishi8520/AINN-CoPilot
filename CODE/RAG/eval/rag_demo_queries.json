@@ -46,5 +46,29 @@
     "query": "The current KPIs look close to baseline, but latency is slightly higher; should we treat this as an incident?",
     "expected_evidence_type": "mixed",
     "notes": "Baseline comparison query for distinguishing normal variance from actionable degradation."
+  },
+  {
+    "intent_type": "GENERAL_QNA",
+    "query": "Which NG-RAN architecture references explain gNB, NG-C, NG-U, and interface responsibilities?",
+    "expected_evidence_type": "spec",
+    "notes": "Standards citation retrieval query intended to surface NG-RAN architecture specification evidence."
+  },
+  {
+    "intent_type": "GENERAL_QNA",
+    "query": "What O-RAN architecture components should be cited when discussing non-RT RIC, near-RT RIC, xApps, and rApps?",
+    "expected_evidence_type": "spec",
+    "notes": "O-RAN architecture lookup for citation-ready retrieval from official architecture sources."
+  },
+  {
+    "intent_type": "DIAGNOSTIC",
+    "query": "Given simulation KPIs showing high PRB utilization, low SINR, and poor throughput in a hotspot, is this congestion or interference?",
+    "expected_evidence_type": "mixed",
+    "notes": "Simulation KPI-aware diagnostic query combining scenario evidence with interference and hotspot runbook guidance."
+  },
+  {
+    "intent_type": "OPTIMIZATION",
+    "query": "Which standards-backed evidence should be cited before recommending mobility or energy optimization changes from simulation results?",
+    "expected_evidence_type": "mixed",
+    "notes": "Eval query for KPI-aware synthesis that should retrieve simulation context plus standards or spec citations."
   }
 ]
