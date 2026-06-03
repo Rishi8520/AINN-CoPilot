@@ -287,6 +287,13 @@ CODE/RAG/knowledge_base/specs/
 
 Then run `/ingest` again.
 
+Current spec coverage includes 3GPP NG-RAN architecture, NR/RRC, network
+resource model, performance measurements, ETSI O-RAN architecture, and official
+O-RAN WG1 use-case sources:
+
+- `oran_wg1_use_cases_detailed_specification.pdf`
+- `oran_wg1_use_cases_analysis_report.pdf`
+
 ## Tests
 
 Run these from WSL or a compatible Linux shell:
@@ -310,15 +317,10 @@ energy optimization, interference or hotspot diagnosis, NG-RAN architecture,
 O-RAN architecture, standards/spec citation retrieval, and simulation
 KPI-aware synthesis.
 
-Official O-RAN WG1 Use Cases / Deployment Scenarios coverage is still pending
-an authorized official PDF or source. The current scenario mapping is
-synthetic/project-authored demo grounding and should not be treated as a
-replacement for the official WG1 document.
-
 ## Known Limitations
 
 - LLM synthesis is optional and depends on an external OpenAI-compatible vLLM
   endpoint; deterministic fallback remains the default.
 - Local Chroma storage is ignored by git.
 - GPU is disabled until a compatible PyTorch/vLLM setup is available.
-- Official standards PDFs must be added separately.
+- Additional official standards PDFs can be added separately as coverage grows.
