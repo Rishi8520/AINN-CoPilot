@@ -3,6 +3,9 @@
 # This file is mounted into the OPEA agent container and tells the
 # agent what tools exist, when to use them, and how to call them.
 #
+# Mount path inside container: /home/user/comps/agent/src/tools/
+# Activated by env var:        tools=/home/user/comps/agent/src/tools/ainn_tools.yaml
+#
 # The 'description' field is READ BY THE LLM — write it as if you
 # are instructing a smart but literal assistant. Be specific.
 # ─────────────────────────────────────────────────────────────────
@@ -15,20 +18,29 @@ run_simulation:
     interference) and you need quantitative data to confirm a hypothesis.
     Also use this when asked to compare network behaviour across different
     load or interference conditions.
+
     Available scenarios:
-      - baseline: normal operation, 20 UEs, no stress
-      - high_load: maximum UE density, tests capacity limits
-      - interference_high: co-channel interference injected, tests SINR degradation
-      - handover_stress: rapid UE mobility, tests handover performance
-      - energy_saving: reduced TX power, tests coverage vs power trade-off
+      - normal_operation: stable baseline 5G NR operation
+      - handover_failure: high mobility / weak overlap / delayed handover stress
+      - energy_optimization: reduced transmit power and resource usage
+      - hotspot_traffic_burst: high-load or interference-like hotspot stress, if supported
+
+    Friendly aliases are also accepted by the Python tool:
+      - baseline -> normal_operation
+      - handover_stress -> handover_failure
+      - energy_saving -> energy_optimization
+      - high_load -> hotspot_traffic_burst
+      - interference_high -> hotspot_traffic_burst
+  pip_dependencies: requests,python-dotenv
   callable_api: tools.py:call_simulation
   args_schema:
     scenario:
       type: str
       description: >
-        The simulation scenario to run. Must be exactly one of:
-        baseline, high_load, interference_high, handover_stress, energy_saving.
-        Choose based on the operator's reported symptom.
+        The simulation scenario to run. Prefer one of:
+        normal_operation, handover_failure, energy_optimization.
+        The tool also accepts aliases such as baseline, handover_stress,
+        energy_saving, high_load, and interference_high.
     ue_count:
       type: int
       description: >
@@ -40,7 +52,13 @@ run_simulation:
       description: >
         The cell identifier the operator is asking about. Use 0 if unknown
         or if the operator does not specify a cell number.
+    slice_type:
+      type: str
+      description: >
+          Network slice type. Use eMBB by default. Use URLLC for low-latency
+          reliability scenarios. Use mMTC for IoT or background traffic scenarios.
   return_output: simulation_kpis
+
 
 rag_retrieve:
   description: >
@@ -50,6 +68,7 @@ rag_retrieve:
     remediation steps backed by specifications, or when you need to explain
     why a particular network behaviour is occurring according to standards.
     Do NOT use this for live network KPI data — use run_simulation for that.
+  pip_dependencies: requests,python-dotenv
   callable_api: tools.py:call_rag
   args_schema:
     query:
