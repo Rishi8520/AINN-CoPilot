@@ -1,197 +1,226 @@
-import os
-import json
-import uuid
-import requests
 import streamlit as st
-from dotenv import load_dotenv
+import time
+from datetime import datetime
 
-# Load from CODE/.env (three levels up from ui/)
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env"))
-
-AGENT_URL = os.environ.get("AGENT_URL", "http://localhost:9090")
-
-# ─────────────────────────────────────────────────────────────────
-# Page config — must be first Streamlit call
-# ─────────────────────────────────────────────────────────────────
+# ─── Page config (must be first Streamlit call) ───────────────────────────────
 st.set_page_config(
     page_title="AINN-CoPilot",
     page_icon="📡",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# ─────────────────────────────────────────────────────────────────
-# Session state initialisation
-# ─────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+[data-testid="stAppViewContainer"] { background-color: #0f1117; }
+[data-testid="stSidebar"] { background-color: #161b27; border-right: 1px solid #1e2538; }
+
+/* Hide branding WITHOUT killing the expand sidebar button */
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
+[data-testid="stToolbarActions"] { visibility: hidden; }
+[data-testid="stHeader"] { background: transparent !important; }
+
+/* Style the expand button that lives in stExpandSidebarButton */
+[data-testid="stExpandSidebarButton"] button {
+    background-color: #161b27 !important;
+    border: 1px solid rgba(45,212,191,0.4) !important;
+    color: #2dd4bf !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+/* Chat message bubbles */
+[data-testid="stChatMessage"] { background-color: #161b27; border-radius: 10px; margin-bottom: 8px; }
+
+.tool-badge {
+    display: inline-block;
+    background: rgba(45,212,191,0.12);
+    border: 1px solid rgba(45,212,191,0.3);
+    color: #2dd4bf;
+    border-radius: 6px;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-family: monospace;
+    margin: 2px 4px 2px 0;
+}
+.tool-badge.sim  { background: rgba(251,146,60,0.12); border-color: rgba(251,146,60,0.3); color: #fb923c; }
+.tool-badge.rag  { background: rgba(96,165,250,0.12); border-color: rgba(96,165,250,0.3); color: #60a5fa; }
+.tool-badge.done { background: rgba(74,222,128,0.12); border-color: rgba(74,222,128,0.3); color: #4ade80; }
+
+.metric-card {
+    background: #1e2538;
+    border: 1px solid #2d3a52;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+}
+.metric-label { color: #8892a4; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.metric-value { color: #e2e8f0; font-size: 18px; font-weight: 700; margin-top: 2px; }
+.metric-value.green { color: #4ade80; }
+.metric-value.orange { color: #fb923c; }
+.metric-value.red { color: #f87171; }
+</style>
+""", unsafe_allow_html=True)
+
+# ─── Session state defaults ───────────────────────────────────────────────────
 if "messages" not in st.session_state:
-    st.session_state.messages = []
+    st.session_state.messages = []          # chat history
 
-if "thread_id" not in st.session_state:
-    st.session_state.thread_id = str(uuid.uuid4())
+if "tool_calls" not in st.session_state:
+    st.session_state.tool_calls = []        # list of tool call records per session
 
-if "agent_ready" not in st.session_state:
-    st.session_state.agent_ready = False
+if "latencies" not in st.session_state:
+    st.session_state.latencies = []         # response latencies (ms)
 
-# ─────────────────────────────────────────────────────────────────
-# Sidebar
-# ─────────────────────────────────────────────────────────────────
+if "session_start" not in st.session_state:
+    st.session_state.session_start = datetime.now().strftime("%H:%M:%S")
+
+if "show_examples" not in st.session_state:
+    st.session_state.show_examples = True
+
+# ─── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.title("📡 AINN-CoPilot")
-    st.caption("AI-Native 5G Network Management")
+    st.markdown("### 📡 AINN-CoPilot")
+    st.markdown(
+        "<small style='color:#8892a4'>AI-Native Network Intelligence<br>Telecom NOC Assistant</small>",
+        unsafe_allow_html=True
+    )
     st.divider()
 
-    # Agent health check
-    st.subheader("System Status")
-    if st.button("🔄 Check Agent Health"):
-        try:
-            resp = requests.get(f"{AGENT_URL}/health", timeout=5)
-            if resp.status_code == 200:
-                st.session_state.agent_ready = True
-                st.success("Agent: Online ✅")
-            else:
-                st.session_state.agent_ready = False
-                st.error(f"Agent returned {resp.status_code}")
-        except requests.exceptions.ConnectionError:
-            st.session_state.agent_ready = False
-            st.error("Agent: Unreachable ❌")
+    # Service health indicators (static for now — will be live-polled in Stage 3)
+    st.markdown("**Service Health**")
+    services = [
+        ("OPEA Gateway",    ":8888", "🟡"),
+        ("OPEA Agent",      ":9090", "🟡"),
+        ("TEI Embedding",   ":6006", "🟡"),
+        ("TEI Reranker",    ":8808", "🟡"),
+        ("Redis VectorDB",  ":6379", "🟡"),
+        ("Simu5G (M1 LAN)", ":8888", "🟡"),
+        ("vLLM (M2 LAN)",   ":8080", "🟡"),
+    ]
+    for name, port, dot in services:
+        st.markdown(
+            f"<div style='display:flex;justify-content:space-between;align-items:center;"
+            f"padding:4px 0;font-size:12px;color:#8892a4'>"
+            f"<span>{name} <code style='font-size:10px'>{port}</code></span>"
+            f"<span>{dot}</span></div>",
+            unsafe_allow_html=True
+        )
 
-    if st.session_state.agent_ready:
-        st.info(f"Session ID:\n`{st.session_state.thread_id[:16]}...`")
-    
     st.divider()
 
-    # New conversation
-    if st.button("🗑️ New Conversation"):
-        st.session_state.messages = []
-        st.session_state.thread_id = str(uuid.uuid4())
+    # Session stats
+    st.markdown("**Session Stats**")
+    total_queries = len([m for m in st.session_state.messages if m["role"] == "user"])
+    sim_calls     = len([t for t in st.session_state.tool_calls if t.get("tool") == "simulate"])
+    rag_calls     = len([t for t in st.session_state.tool_calls if t.get("tool") == "rag"])
+    avg_latency   = (
+        f"{int(sum(st.session_state.latencies)/len(st.session_state.latencies))} ms"
+        if st.session_state.latencies else "—"
+    )
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Queries", total_queries)
+        st.metric("Sim calls", sim_calls)
+    with col2:
+        st.metric("RAG calls", rag_calls)
+        st.metric("Avg latency", avg_latency)
+
+    st.divider()
+
+    # Controls
+    if st.button("🗑 Clear chat", use_container_width=True):
+        st.session_state.messages   = []
+        st.session_state.tool_calls = []
+        st.session_state.latencies  = []
+        st.rerun()
+
+    st.markdown(
+        f"<small style='color:#4a5568'>Session started: {st.session_state.session_start}</small>",
+        unsafe_allow_html=True
+    )
+
+# ─── Main panel ───────────────────────────────────────────────────────────────
+st.markdown("## 📡 Network Operations CoPilot")
+st.markdown(
+    "<p style='color:#8892a4;margin-top:-12px;'>Ask about 5G network faults, KPI analysis, "
+    "3GPP spec lookups, or run live Simu5G simulations.</p>",
+    unsafe_allow_html=True
+)
+
+# ─── Quick-switch example bar (always visible at top) ─────────────────────────
+examples = [
+    ("🔴 Fault diagnosis",
+     "gNB-7 sector 3 is showing BLER above 15%. Diagnose and suggest corrective actions."),
+    ("📊 KPI simulation",
+     "Simulate a 5G NR scenario with 50 UEs under heavy load and report PRB utilisation."),
+    ("📖 Spec lookup",
+     "What does 3GPP TS 38.321 say about HARQ retransmission limits?"),
+]
+
+if st.session_state.messages:
+    # Show as a compact row of buttons when chat is active
+    st.markdown(
+        "<p style='color:#8892a4;font-size:12px;margin-bottom:6px;'>Try another example:</p>",
+        unsafe_allow_html=True
+    )
+    ex_cols = st.columns(len(examples))
+    for col, (label, prompt) in zip(ex_cols, examples):
+        with col:
+            if st.button(label, use_container_width=True, key=f"ex_{label}"):
+                st.session_state.messages.append({"role": "user", "content": prompt})
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": "_Agent not yet connected._"
+                })
+                st.rerun()
+
+    # New query clears only if user explicitly wants a fresh slate
+    if st.button("🗑 Clear & start over", key="clear_main"):
+        st.session_state.messages   = []
+        st.session_state.tool_calls = []
+        st.session_state.latencies  = []
         st.rerun()
 
     st.divider()
 
-    # Example queries
-    st.subheader("Example Queries")
-    examples = [
-        "Cell 7 throughput dropped 40%, what's wrong?",
-        "Run a high interference simulation with 30 UEs",
-        "What does O-RAN say about handover optimisation?",
-        "Compare baseline vs high_load scenario for 50 UEs",
-        "Cell 3 has 80% packet loss, diagnose and suggest fix"
-    ]
-    for example in examples:
-        if st.button(example, use_container_width=True):
-            st.session_state.pending_input = example
-            st.rerun()
+else:
+    # First-time landing — show the big prompt cards
+    st.markdown("**Try asking:**")
+    example_cols = st.columns(3)
+    for col, (label, prompt) in zip(example_cols, examples):
+        with col:
+            if st.button(label, use_container_width=True, help=prompt, key=f"land_{label}"):
+                st.session_state.messages.append({"role": "user", "content": prompt})
+                st.rerun()
 
-# ─────────────────────────────────────────────────────────────────
-# Main chat area
-# ─────────────────────────────────────────────────────────────────
-st.title("AINN-CoPilot — 5G Network Management Assistant")
-st.caption(
-    "Powered by OPEA · Simu5G · 3GPP/O-RAN Knowledge Base"
-)
-
-# Render existing conversation history
+# ─── Chat history display ─────────────────────────────────────────────────────
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
+    with st.chat_message(msg["role"], avatar="🧑‍💻" if msg["role"] == "user" else "📡"):
+        if msg.get("tool_badges"):
+            st.markdown(msg["tool_badges"], unsafe_allow_html=True)
         st.markdown(msg["content"])
+        if msg.get("latency_ms"):
+            st.caption(f"⏱ {msg['latency_ms']} ms")
 
-# ─────────────────────────────────────────────────────────────────
-# Handle input — either from chat_input or sidebar example button
-# ─────────────────────────────────────────────────────────────────
-prompt = st.chat_input("Describe your network issue or ask a question...")
-
-# Pick up example button click from session state
-if "pending_input" in st.session_state:
-    prompt = st.session_state.pop("pending_input")
-
-if prompt:
-    # Render user message immediately
+# ─── Chat input ───────────────────────────────────────────────────────────────
+if prompt := st.chat_input("Describe the network issue or ask a 5G question…"):
+    st.session_state.show_examples = False
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
+
+    with st.chat_message("user", avatar="🧑‍💻"):
         st.markdown(prompt)
 
-    # Call agent and stream response
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar="📡"):
         placeholder = st.empty()
-        full_response = ""
-        tool_calls_made = []
-
-        payload = {
-            "role": "user",
-            "messages": prompt,
-            "thread_id": st.session_state.thread_id,
-            "stream": True
-        }
-
-        try:
-            with requests.post(
-                f"{AGENT_URL}/v1/chat/completions",
-                data=json.dumps(payload),
-                stream=True,
-                headers={"Content-Type": "application/json"},
-                timeout=300    # full ReAct loop with simulation can take ~3 min
-            ) as resp:
-                resp.raise_for_status()
-
-                for line in resp.iter_lines(decode_unicode=True):
-                    if not line:
-                        continue
-
-                    # Detect tool call annotations in stream
-                    # (agent emits these as intermediate thoughts)
-                    if "run_simulation" in line:
-                        tool_calls_made.append("🔬 Running Simu5G simulation...")
-                        placeholder.markdown(
-                            "\n\n".join(tool_calls_made) + "\n\n" + full_response + "▌"
-                        )
-
-                    elif "rag_retrieve" in line:
-                        tool_calls_made.append("📚 Querying 3GPP/O-RAN knowledge base...")
-                        placeholder.markdown(
-                            "\n\n".join(tool_calls_made) + "\n\n" + full_response + "▌"
-                        )
-
-                    # Accumulate final answer tokens
-                    elif line.startswith("data: ") and line != "data: [DONE]":
-                        chunk = line[6:]   # strip "data: " prefix
-                        full_response += chunk
-                        display = (
-                            "\n\n".join(tool_calls_made) + "\n\n" + full_response
-                            if tool_calls_made else full_response
-                        ) + "▌"
-                        placeholder.markdown(display)
-
-            # Final render without cursor
-            final_display = (
-                "\n\n".join(tool_calls_made) + "\n\n---\n\n" + full_response
-                if tool_calls_made else full_response
-            )
-            placeholder.markdown(final_display)
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": final_display
-            })
-
-        except requests.exceptions.ConnectionError:
-            error_msg = (
-                "❌ **Cannot reach the AINN Agent.**\n\n"
-                f"Make sure the agent container is running at `{AGENT_URL}`.\n\n"
-                "Run: `docker compose --env-file ../.env up -d ainn-agent`"
-            )
-            placeholder.error(error_msg)
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": error_msg
-            })
-
-        except requests.exceptions.Timeout:
-            error_msg = (
-                "⏱️ **Request timed out after 5 minutes.**\n\n"
-                "The simulation may still be running. Try asking again "
-                "or reduce the `ue_count` in your query."
-            )
-            placeholder.warning(error_msg)
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": error_msg
-            })
+        placeholder.markdown(
+            "<span style='color:#8892a4;font-style:italic'>⏳ Agent not yet connected — "
+            "backend wiring comes in Stage 2.</span>",
+            unsafe_allow_html=True
+        )
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": "_Agent not yet connected._"
+        })
