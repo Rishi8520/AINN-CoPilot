@@ -31,6 +31,9 @@ SIM_HEALTH_PATH = os.getenv("SIM_HEALTH_PATH", "/health")
 RAG_HEALTH_PATH = os.getenv("RAG_HEALTH_PATH", "/health")
 AGENT_HEALTH_PATH = os.getenv("AGENT_HEALTH_PATH", "/v1/health_check")
 LLM_ENDPOINT = os.getenv("LLM_ENDPOINT_URL", "http://localhost:8080")
+HEALTH_PROBE_TIMEOUT_SECONDS = float(os.getenv("HEALTH_PROBE_TIMEOUT_SECONDS", "4.0"))
+STARTUP_PROBE_RETRIES = int(os.getenv("STARTUP_PROBE_RETRIES", "5"))
+STARTUP_PROBE_DELAY_SECONDS = float(os.getenv("STARTUP_PROBE_DELAY_SECONDS", "6.0"))
 
 # ── Intent types — keeps gateway routing explicit ─────────────────────────────
 class IntentType(str, Enum):
@@ -103,7 +106,7 @@ async def _probe(name: str, url: str, path: str = "/health") -> ToolStatus:
     import time
     start = time.monotonic()
     try:
-        async with httpx.AsyncClient(timeout=4.0) as client:
+        async with httpx.AsyncClient(timeout=HEALTH_PROBE_TIMEOUT_SECONDS) as client:
             r = await client.get(f"{url}{path}")
             latency = (time.monotonic() - start) * 1000
             return ToolStatus(
@@ -145,7 +148,10 @@ async def get_agent_status() -> AgentStatus:
     )
 
 # ── Startup validator — called by gateway.py on container boot ─────────────────
-async def validate_on_startup(retry: int = 5, delay: float = 6.0):
+async def validate_on_startup(
+    retry: int = STARTUP_PROBE_RETRIES,
+    delay: float = STARTUP_PROBE_DELAY_SECONDS,
+):
     """
     Retries tool health probes at startup.
     Logs warnings but does NOT crash the gateway if a tool is down —
