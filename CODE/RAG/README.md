@@ -39,6 +39,111 @@ stack is available.
 - `POST /v1/retrievaltool/json`
 - `POST /synthesize`
 
+## Embedding And Reranker Backends
+
+By default, RAG uses local `sentence-transformers` models in-process:
+
+```env
+EMBEDDING_BACKEND=local
+EMBEDDING_MODEL=BAAI/bge-base-en-v1.5
+RERANKER_BACKEND=local
+RERANKER_MODEL=BAAI/bge-reranker-base
+```
+
+This is the source-of-truth path for the current local demo. It requires no
+external embedding or reranker microservices.
+
+RAG can also be pointed at OPEA-style external embedding and reranker services
+without changing the retrieval API:
+
+```env
+EMBEDDING_BACKEND=external
+EMBEDDING_ENDPOINT_URL=http://localhost:6000/embed
+EMBEDDING_MODEL=BAAI/bge-base-en-v1.5
+EMBEDDING_TIMEOUT_SECONDS=30
+
+RERANKER_BACKEND=external
+RERANKER_ENDPOINT_URL=http://localhost:6001/rerank
+RERANKER_MODEL=BAAI/bge-reranker-base
+RERANKER_TIMEOUT_SECONDS=30
+```
+
+If an external endpoint is not configured, times out, fails, returns invalid
+JSON, or returns an invalid shape, RAG falls back to the local model path. Set
+`RERANKER_BACKEND=disabled` to skip reranking and return vector-search scores
+only.
+
+Expected external embedding request:
+
+```json
+{
+  "model": "BAAI/bge-base-en-v1.5",
+  "input": [
+    "first chunk or query",
+    "second chunk"
+  ]
+}
+```
+
+Supported embedding responses:
+
+```json
+{
+  "embeddings": [
+    [0.012, -0.034, 0.056],
+    [0.078, -0.09, 0.012]
+  ]
+}
+```
+
+OpenAI-style `data` responses are also accepted:
+
+```json
+{
+  "data": [
+    {"embedding": [0.012, -0.034, 0.056]},
+    {"embedding": [0.078, -0.09, 0.012]}
+  ]
+}
+```
+
+Expected external reranker request:
+
+```json
+{
+  "model": "BAAI/bge-reranker-base",
+  "query": "Why did handover failures increase?",
+  "documents": [
+    "candidate chunk one",
+    "candidate chunk two"
+  ]
+}
+```
+
+Supported reranker responses:
+
+```json
+{
+  "scores": [0.42, 0.91]
+}
+```
+
+Indexed result responses are also accepted:
+
+```json
+{
+  "results": [
+    {"index": 0, "score": 0.42},
+    {"index": 1, "score": 0.91}
+  ]
+}
+```
+
+The external embedding dimension must match the dimension already stored in the
+Chroma collection. If Member 3 changes the embedding service or model family,
+rebuild the collection with `/ingest` after clearing the old local Chroma
+storage.
+
 ## Curl Examples
 
 Health:

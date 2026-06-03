@@ -1,9 +1,16 @@
+import importlib
 import json
 import sys
+import types
 from pathlib import Path
 
 RAG_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAG_ROOT))
+
+if importlib.util.find_spec("chromadb") is None:
+    chromadb_stub = types.ModuleType("chromadb")
+    chromadb_stub.PersistentClient = object
+    sys.modules["chromadb"] = chromadb_stub
 
 from app.schemas import (  # noqa: E402
     RetrievalRequest,
@@ -14,6 +21,8 @@ from app.schemas import (  # noqa: E402
 )
 from app import config  # noqa: E402
 from app import synthesis  # noqa: E402
+from app import vector_store  # noqa: E402
+from app.vector_store import TelcoVectorStore  # noqa: E402
 
 
 DEMO_QUERY_PATH = RAG_ROOT / "eval" / "rag_demo_queries.json"
@@ -36,6 +45,35 @@ class FakeLLMResponse:
         return json.dumps(self.payload).encode("utf-8")
 
 
+class FakeEncoded:
+    def __init__(self, vectors: list[list[float]]):
+        self.vectors = vectors
+
+    def tolist(self):
+        return self.vectors
+
+
+class FakeEmbeddingModel:
+    def __init__(self):
+        self.calls = []
+
+    def encode(self, texts, normalize_embeddings, batch_size, show_progress_bar):
+        self.calls.append(
+            {
+                "texts": texts,
+                "normalize_embeddings": normalize_embeddings,
+                "batch_size": batch_size,
+                "show_progress_bar": show_progress_bar,
+            }
+        )
+        return FakeEncoded([[0.1, 0.2, 0.3] for _ in texts])
+
+
+class FakeReranker:
+    def predict(self, pairs):
+        return [0.2, 0.9][: len(pairs)]
+
+
 def _sample_sources() -> list[SourceChunk]:
     return [
         SourceChunk(
@@ -52,6 +90,94 @@ def _sample_sources() -> list[SourceChunk]:
             chunk=1,
         )
     ]
+
+
+def test_embedding_and_reranker_config_defaults_are_local(monkeypatch):
+    with monkeypatch.context() as env:
+        for name in [
+            "EMBEDDING_BACKEND",
+            "EMBEDDING_ENDPOINT_URL",
+            "EMBEDDING_MODEL",
+            "EMBEDDING_TIMEOUT_SECONDS",
+            "RERANKER_BACKEND",
+            "RERANKER_ENDPOINT_URL",
+            "RERANKER_MODEL",
+            "RERANKER_TIMEOUT_SECONDS",
+        ]:
+            env.delenv(name, raising=False)
+
+        reloaded = importlib.reload(config)
+
+        assert reloaded.EMBEDDING_BACKEND == "local"
+        assert reloaded.EMBEDDING_ENDPOINT_URL == ""
+        assert reloaded.EMBEDDING_MODEL == "BAAI/bge-base-en-v1.5"
+        assert reloaded.EMBEDDING_TIMEOUT_SECONDS == 30
+        assert reloaded.RERANKER_BACKEND == "local"
+        assert reloaded.RERANKER_ENDPOINT_URL == ""
+        assert reloaded.RERANKER_MODEL == "BAAI/bge-reranker-base"
+        assert reloaded.RERANKER_TIMEOUT_SECONDS == 30
+
+    importlib.reload(config)
+
+
+def test_external_embedding_and_reranker_config_can_be_parsed(monkeypatch):
+    with monkeypatch.context() as env:
+        env.setenv("EMBEDDING_BACKEND", "external")
+        env.setenv("EMBEDDING_ENDPOINT_URL", "http://embedding.example/embed")
+        env.setenv("EMBEDDING_MODEL", "opea-embedding")
+        env.setenv("EMBEDDING_TIMEOUT_SECONDS", "9")
+        env.setenv("RERANKER_BACKEND", "external")
+        env.setenv("RERANKER_ENDPOINT_URL", "http://reranker.example/rerank")
+        env.setenv("RERANKER_MODEL", "opea-reranker")
+        env.setenv("RERANKER_TIMEOUT_SECONDS", "11")
+
+        reloaded = importlib.reload(config)
+
+        assert reloaded.EMBEDDING_BACKEND == "external"
+        assert reloaded.EMBEDDING_ENDPOINT_URL == "http://embedding.example/embed"
+        assert reloaded.EMBEDDING_MODEL == "opea-embedding"
+        assert reloaded.EMBEDDING_TIMEOUT_SECONDS == 9
+        assert reloaded.RERANKER_BACKEND == "external"
+        assert reloaded.RERANKER_ENDPOINT_URL == "http://reranker.example/rerank"
+        assert reloaded.RERANKER_MODEL == "opea-reranker"
+        assert reloaded.RERANKER_TIMEOUT_SECONDS == 11
+
+    importlib.reload(config)
+
+
+def test_external_embedding_failure_falls_back_to_local_model(monkeypatch):
+    store = object.__new__(TelcoVectorStore)
+    store.embedding_model = FakeEmbeddingModel()
+
+    def fake_urlopen(request, timeout):
+        raise TimeoutError("embedding endpoint timed out")
+
+    monkeypatch.setattr(config, "EMBEDDING_BACKEND", "external")
+    monkeypatch.setattr(config, "EMBEDDING_ENDPOINT_URL", "http://embedding.example/embed")
+    monkeypatch.setattr(config, "EMBEDDING_TIMEOUT_SECONDS", 3)
+    monkeypatch.setattr(vector_store.urllib.request, "urlopen", fake_urlopen)
+
+    embeddings = store._encode_texts(["handover failure"])
+
+    assert embeddings == [[0.1, 0.2, 0.3]]
+    assert store.embedding_model.calls[0]["texts"] == ["handover failure"]
+    assert store.embedding_model.calls[0]["normalize_embeddings"] is True
+
+
+def test_external_reranker_failure_falls_back_to_local_model(monkeypatch):
+    store = object.__new__(TelcoVectorStore)
+    store.reranker = FakeReranker()
+    candidates = [{"text": "first"}, {"text": "second"}]
+
+    def fake_urlopen(request, timeout):
+        raise TimeoutError("reranker endpoint timed out")
+
+    monkeypatch.setattr(config, "RERANKER_BACKEND", "external")
+    monkeypatch.setattr(config, "RERANKER_ENDPOINT_URL", "http://reranker.example/rerank")
+    monkeypatch.setattr(config, "RERANKER_TIMEOUT_SECONDS", 3)
+    monkeypatch.setattr(vector_store.urllib.request, "urlopen", fake_urlopen)
+
+    assert store._rerank_scores("query", candidates) == [0.2, 0.9]
 
 
 def test_retrieval_request_effective_query_supports_text_and_query():

@@ -15,8 +15,14 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+EMBEDDING_BACKEND = os.getenv("EMBEDDING_BACKEND", "local").strip().lower()
+EMBEDDING_ENDPOINT_URL = os.getenv("EMBEDDING_ENDPOINT_URL", "")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5")
+EMBEDDING_TIMEOUT_SECONDS = _int_env("EMBEDDING_TIMEOUT_SECONDS", 30)
+RERANKER_BACKEND = os.getenv("RERANKER_BACKEND", "local").strip().lower()
+RERANKER_ENDPOINT_URL = os.getenv("RERANKER_ENDPOINT_URL", "")
 RERANKER_MODEL = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-base")
+RERANKER_TIMEOUT_SECONDS = _int_env("RERANKER_TIMEOUT_SECONDS", 30)
 CHROMA_DIR = os.getenv("CHROMA_DIR", "./storage/chroma")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "telcomind_knowledge")
 KNOWLEDGE_BASE_DIR = os.getenv("KNOWLEDGE_BASE_DIR", "./knowledge_base")
