@@ -3,52 +3,94 @@ import json
 import requests
 from dotenv import load_dotenv
 
-# Load from CODE/.env (two levels up from this file)
+# load_dotenv is only effective locally; inside Docker, env vars are
+# injected by docker-compose via the 'environment:' block in docker-compose.yml
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 
 SIM_SERVICE_URL = os.environ.get("SIM_SERVICE_URL", "http://localhost:8888")
 RAG_SERVICE_URL = os.environ.get("RAG_SERVICE_URL", "http://localhost:8889")
+SCENARIO_ALIASES = {
+    "baseline": "normal_operation",
+    "normal_operation": "normal_operation",
 
+    "handover_stress": "handover_failure",
+    "handover_failure": "handover_failure",
 
-def call_simulation(scenario: str, ue_count: int = 20, cell_id: int = 0) -> str:
+    "energy_saving": "energy_optimization",
+    "energy_optimization": "energy_optimization",
+
+    "high_load": "hotspot_traffic_burst",
+    "interference_high": "hotspot_traffic_burst",
+    "hotspot_traffic_burst": "hotspot_traffic_burst",
+}
+
+def call_simulation(
+    scenario: str,
+    ue_count: int = 20,
+    cell_id: int = 0,
+    slice_type: str = "eMBB",
+) -> str:
     """
-    Calls Member 1's Simu5G REST endpoint.
+    Calls Member 1's Simu5G REST endpoint over Tailscale.
 
-    Valid scenarios:
-        baseline, high_load, interference_high, handover_stress, energy_saving
-
-    Returns a JSON string with KPIs:
-        throughput_mbps, latency_ms, sinr_db, packet_loss_pct,
-        handover_count, simulation_time_s
+    Accepts friendly scenario aliases used by the Agent and maps them to
+    Member 1's current Simulation scenario names.
     """
+    mapped_scenario = SCENARIO_ALIASES.get(scenario, scenario)
+
     payload = {
-        "scenario": scenario,
+        "scenario": mapped_scenario,
         "ue_count": ue_count,
-        "cell_id": cell_id
+        "cell_id": cell_id,
+        "slice_type": slice_type,
     }
+
     try:
         resp = requests.post(
             f"{SIM_SERVICE_URL}/simulate",
             json=payload,
-            timeout=120   # simulations can take up to 2 minutes
+            timeout=120,
         )
         resp.raise_for_status()
-        return json.dumps(resp.json())
+        raw = resp.json()
+
+        data = raw.get("data", raw)
+        metrics = data.get("metrics", raw.get("metrics", {}))
+
+        normalized = {
+            "status": raw.get("status", "success"),
+            "requested_scenario": scenario,
+            "scenario": mapped_scenario,
+            "ue_count": ue_count,
+            "cell_id": cell_id,
+            "slice_type": slice_type,
+            "metrics": metrics,
+            "topology": data.get("cluster_topology"),
+            "sector_prb_matrix": data.get("sector_prb_matrix"),
+            "raw": raw,
+        }
+
+        return json.dumps(normalized)
 
     except requests.exceptions.ConnectionError:
         return json.dumps({
             "error": "Simulation service is unreachable.",
-            "hint": f"Is Member 1's container running at {SIM_SERVICE_URL}?"
+            "hint": f"Check whether Member 1's Simulation service is reachable at {SIM_SERVICE_URL} over Tailscale.",
         })
     except requests.exceptions.Timeout:
         return json.dumps({
             "error": "Simulation timed out after 120 seconds.",
-            "hint": "Try a smaller ue_count or check if OMNeT++ is hanging."
+            "hint": "Try a smaller ue_count or check whether the simulation backend is hanging.",
         })
     except requests.exceptions.HTTPError as e:
         return json.dumps({
-            "error": f"Simulation service returned HTTP {resp.status_code}",
-            "detail": str(e)
+            "error": f"Simulation service returned HTTP {e.response.status_code if e.response else 'unknown'}",
+            "detail": str(e),
+        })
+    except Exception as e:
+        return json.dumps({
+            "error": "Unexpected simulation tool failure.",
+            "detail": str(e),
         })
 
 
@@ -59,11 +101,14 @@ def call_rag(query: str) -> str:
     Queries the 3GPP / O-RAN knowledge base and returns
     reranked relevant text chunks with source references.
     """
-    payload = {"text": query}
+    # OPEA retrievaltool expects a JSON string sent as raw data,
+    # NOT a dict via json= kwarg — must use data= with explicit header.
+    content = json.dumps({"text": query})
     try:
         resp = requests.post(
             f"{RAG_SERVICE_URL}/v1/retrievaltool",
-            json=payload,
+            data=content,
+            headers={"Content-Type": "application/json"},
             timeout=30
         )
         resp.raise_for_status()
@@ -80,7 +125,7 @@ def call_rag(query: str) -> str:
         })
     except requests.exceptions.HTTPError as e:
         return json.dumps({
-            "error": f"RAG service returned HTTP {resp.status_code}",
+            "error": f"RAG service returned HTTP {e.response.status_code if e.response else 'unknown'}",
             "detail": str(e)
         })
 
