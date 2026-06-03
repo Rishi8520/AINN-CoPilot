@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env"))
 
-AGENT_URL = os.environ.get("AGENT_URL", "http://localhost:9090")
-
+#AGENT_URL = os.environ.get("AGENT_URL", "http://localhost:9090")
+GATEWAY_URL = os.environ.get("GATEWAY_URL", "http://localhost:8080")
 # ─────────────────────────────────────────────────────────────────
 # Test cases — each maps to an expected tool usage pattern
 # judges will want to see all 3 patterns working
@@ -78,12 +78,17 @@ def run_single_query(query: str, thread_id: str, stream: bool = False) -> dict:
     - response text
     - HTTP status
     """
+    #payload = {
+    #    "role": "user",
+    #    "messages": query,
+    #    "thread_id": thread_id,
+    #    "stream": stream
+    #}
     payload = {
-        "role": "user",
-        "messages": query,
-        "thread_id": thread_id,
-        "stream": stream
-    }
+    "query": query,
+    "thread_id": thread_id,
+    "stream": stream,
+}
 
     result = {
         "query": query,
@@ -100,7 +105,7 @@ def run_single_query(query: str, thread_id: str, stream: bool = False) -> dict:
         if stream:
             first_token_recorded = False
             with requests.post(
-                f"{AGENT_URL}/v1/chat/completions",
+                f"{GATEWAY_URL}/v1/chat",
                 data=json.dumps(payload),
                 stream=True,
                 headers={"Content-Type": "application/json"},
@@ -115,7 +120,7 @@ def run_single_query(query: str, thread_id: str, stream: bool = False) -> dict:
                         result["response"] += line[6:]
         else:
             resp = requests.post(
-                f"{AGENT_URL}/v1/chat/completions",
+                f"{GATEWAY_URL}/v1/chat",
                 json=payload,
                 timeout=300
             )
@@ -154,7 +159,7 @@ def run_benchmark(test_cases: list, runs_per_case: int = 3) -> dict:
     """
     print(f"\n{'='*65}")
     print(f"  AINN-CoPilot Benchmark — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"  Agent: {AGENT_URL}")
+    print(f"  Gateway: {GATEWAY_URL}")
     print(f"  Cases: {len(test_cases)} | Runs per case: {runs_per_case}")
     print(f"{'='*65}\n")
 
@@ -226,7 +231,7 @@ def run_benchmark(test_cases: list, runs_per_case: int = 3) -> dict:
 
     report = {
         "timestamp": datetime.now().isoformat(),
-        "agent_url": AGENT_URL,
+        "gateway_url": GATEWAY_URL,
         "total_cases": len(test_cases),
         "passed": passed_count,
         "failed": len(test_cases) - passed_count,
