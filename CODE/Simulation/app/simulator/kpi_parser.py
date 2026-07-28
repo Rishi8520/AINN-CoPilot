@@ -1,86 +1,110 @@
-import random
-import math
+"""
+Parses REAL Simu5G/OMNeT++ .sca scalar output files.
+
+No values here are synthesized — everything returned comes directly
+from what the actual opp_run execution wrote to disk. If a metric
+wasn't recorded for a given module, it is simply absent.
+
+Module attribution:
+- Throughput (macCellThroughputDl:simu5g_rateavg) and packet loss
+  (macCellPacketLossDl:mean) are recorded on gNodeB[N] modules.
+- Per-UE MAC-layer delay (macDelayDl:mean) is recorded on ue[N]
+  modules and is present regardless of traffic app (UdpBasicApp or
+  Cbr*) — confirmed present in real .sca output.
+"""
+
+import re
+import statistics
+from typing import Dict, List
+
+
+SCALAR_LINE = re.compile(
+    r'^scalar\s+(\S+)\s+([\w:]+)\s+([0-9eE+\-.]+|nan)\s*$'
+)
+
+GNB_INDEX = re.compile(r'gNodeB\[(\d+)\]')
+UE_INDEX = re.compile(r'\bue\[(\d+)\]')
+
 
 class KPIParser:
-    _active_policies = {}
 
-    @classmethod
-    def apply_policy(cls, target_sector: str, policy_type: str) -> dict:
-        cls._active_policies[target_sector] = policy_type
-        return {"status": "policy_applied", "sector": target_sector, "policy": policy_type}
+    @staticmethod
+    def parse_sca_file(sca_path: str) -> Dict:
+        per_module: Dict[str, Dict[str, float]] = {}
+        raw_count = 0
 
-    @classmethod
-    def parse_scalars(cls, results_dir: str, scenario_name: str, ue_count: int = 10) -> dict:
-        isd = 500
-        num_gnbs = 7
-        sectors_per_site = 3
-        total_sectors = num_gnbs * sectors_per_site
+        try:
+            with open(sca_path, "r", errors="ignore") as f:
+                for line in f:
+                    m = SCALAR_LINE.match(line.strip())
+                    if not m:
+                        continue
+                    module, stat_name, value = m.groups()
+                    if value == "nan":
+                        continue
+                    raw_count += 1
+                    per_module.setdefault(module, {})[stat_name] = float(value)
+        except FileNotFoundError:
+            return {"aggregate": {}, "per_gnb": {}, "per_ue": {}, "raw_scalar_count": 0,
+                    "error": f"not found: {sca_path}"}
 
-        prb_utilization = {}
-        for cell in range(num_gnbs):
-            for sector in range(sectors_per_site):
-                sector_id = f"gNB_{cell}_Sec_{sector}"
-                phase_offset = (cell * 0.5) + (sector * 0.2)
-                util = 0.6 + 0.2 * math.sin(phase_offset)
-                prb_utilization[sector_id] = round(util * 100, 1)
-
-        ho_success_rate = 0.98
-        packet_loss = 1.2
-        avg_sinr = 18.5
-        base_latency = 12.0
-        throughput_multiplier = 1.0
-        energy_saved = 0.0
-
-        if scenario_name == "handover_failure":
-            ho_success_rate = 0.35
-            packet_loss = 14.2
-            avg_sinr = 4.5
-            base_latency = 68.4
-            throughput_multiplier = 0.4
-        elif scenario_name == "hotspot_traffic_burst":
-            prb_utilization["gNB_0_Sec_0"] = 98.5
-            packet_loss = 4.8
-            avg_sinr = 9.0
-            base_latency = 28.1
-            throughput_multiplier = 0.6
-
-        sleep_count = 0
-        for sector_id, policy in cls._active_policies.items():
-            if sector_id in prb_utilization:
-                if policy == "deep_sleep":
-                    prb_utilization[sector_id] = 0.0
-                    sleep_count += 1
-                elif policy == "power_trim":
-                    prb_utilization[sector_id] = max(10.0, prb_utilization[sector_id] * 0.5)
-                    sleep_count += 0.5
-
-        if sleep_count > 0:
-            energy_saved = min(45.0, (sleep_count / total_sectors) * 100 * 1.5)
-            if scenario_name != "handover_failure":
-                avg_sinr = max(8.0, avg_sinr - (sleep_count * 1.2))
-                ho_success_rate = max(0.88, ho_success_rate - (sleep_count * 0.02))
-                base_latency += (sleep_count * 0.8)
-                throughput_multiplier *= max(0.7, 1.0 - (sleep_count * 0.04))
-
-        rng = random.Random(f"{scenario_name}:{ue_count}:{len(cls._active_policies)}")
-        load_factor = max(0.3, 1.0 - ((ue_count - 10) * 0.01))
-        avg_throughput = (115.0 * throughput_multiplier * load_factor) + rng.uniform(-2.0, 2.0)
+        per_gnb = KPIParser._extract_by_index(per_module, GNB_INDEX)
+        per_ue = KPIParser._extract_by_index(per_module, UE_INDEX)
 
         return {
-            "cluster_topology": {
-                "layout": "7-Cell Symmetric Hexagonal Urban Cluster",
-                "inter_site_distance_meters": isd,
-                "total_monitored_sectors": total_sectors,
-                "active_closed_loop_policies": cls._active_policies
+            "aggregate": KPIParser._aggregate(per_gnb, per_ue),
+            "per_gnb": per_gnb,
+            "per_ue": per_ue,
+            "raw_scalar_count": raw_count,
+        }
+
+    @staticmethod
+    def _extract_by_index(per_module: Dict[str, Dict[str, float]], pattern: re.Pattern) -> Dict[int, Dict]:
+        by_index: Dict[int, Dict[str, List[float]]] = {}
+        for mod, stats in per_module.items():
+            m = pattern.search(mod)
+            if not m:
+                continue
+            idx = int(m.group(1))
+            bucket = by_index.setdefault(idx, {})
+            for k, v in stats.items():
+                bucket.setdefault(k, []).append(v)
+
+        result = {}
+        for idx, stats in by_index.items():
+            result[idx] = {k: round(statistics.mean(v), 4) for k, v in stats.items() if v}
+        return result
+
+    @staticmethod
+    def _aggregate(per_gnb: Dict[int, Dict], per_ue: Dict[int, Dict]) -> Dict:
+        throughput_vals = [
+            stats["macCellThroughputDl:simu5g_rateavg"]
+            for stats in per_gnb.values()
+            if "macCellThroughputDl:simu5g_rateavg" in stats
+        ]
+        loss_vals = [
+            stats["macCellPacketLossDl:mean"]
+            for stats in per_gnb.values()
+            if "macCellPacketLossDl:mean" in stats
+        ]
+        # Real MAC-layer per-UE delay, present for any traffic app type.
+        delay_vals = [
+            stats["macDelayDl:mean"]
+            for stats in per_ue.values()
+            if "macDelayDl:mean" in stats and stats["macDelayDl:mean"] > 0
+        ]
+
+        throughput_mbps = round(sum(throughput_vals) / 1e6, 4) if throughput_vals else None
+        packet_loss_percent = round(statistics.mean(loss_vals) * 100, 4) if loss_vals else None
+        latency_ms = round(statistics.mean(delay_vals) * 1000, 4) if delay_vals else None
+
+        return {
+            "throughput_mbps": throughput_mbps,
+            "latency_ms": latency_ms,
+            "packet_loss_percent": packet_loss_percent,
+            "samples": {
+                "throughput": len(throughput_vals),
+                "loss": len(loss_vals),
+                "delay": len(delay_vals),
             },
-            "metrics": {
-                "throughput_mbps": round(avg_throughput, 1),
-                "latency_ms": round(base_latency, 1),
-                "packet_loss_percent": round(packet_loss, 2),
-                "sinr_db": round(avg_sinr, 1),
-                "handover_success_rate": round(ho_success_rate, 2),
-                "handover_count": int((1.0 - ho_success_rate) * ue_count * 10),
-                "energy_saved_percent": round(energy_saved, 1)
-            },
-            "sector_prb_matrix": prb_utilization
         }

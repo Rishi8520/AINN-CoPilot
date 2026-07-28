@@ -1,81 +1,87 @@
 from fastapi import APIRouter, HTTPException
-from app.api.schemas import SimulationRequest, PolicyRequest
-from app.simulator.simu5g_runner import Simu5GRunner
-from app.simulator.kpi_parser import KPIParser
+from pydantic import BaseModel, Field
+from typing import Optional
+
+from app.simulator.timeline_runner import TimelineRunner
 
 router = APIRouter()
-runner = Simu5GRunner()
 
-SCENARIO_ALIASES = {
-    "baseline": "normal_operation",
-    "normal_operation": "normal_operation",
+# Single shared, long-running runner for the whole process.
+# Manages the real sequence of Simu5G subprocess phases.
+runner = TimelineRunner(loop=True)
 
-    "handover_stress": "handover_failure",
-    "handover_failure": "handover_failure",
 
-    "energy_saving": "energy_optimization",
-    "energy_optimization": "energy_optimization",
+class RemediationRequest(BaseModel):
+    gnb_id: int
+    action: str = Field(..., description="e.g. traffic_steering | power_boost | activate_backup_power | restart_cell")
+    detail: Optional[str] = ""
 
-    "high_load": "hotspot_traffic_burst",
-    "interference_high": "hotspot_traffic_burst",
-    "hotspot_traffic_burst": "hotspot_traffic_burst",
-}
 
-SUPPORTED_SCENARIOS = set(SCENARIO_ALIASES.values())
-
-@router.get("/scenarios")
-async def list_scenarios():
+@router.get("/health")
+def health():
+    snap = runner.snapshot()
     return {
-        "supported_scenarios": sorted(SUPPORTED_SCENARIOS),
-        "aliases": SCENARIO_ALIASES,
-        "slice_types": ["eMBB", "URLLC", "mMTC"]
+        "backend": "UP",
+        "simulation": "RUNNING" if snap["running"] else "STOPPED",
+        "engine": snap["engine"],
+        "current_phase": snap["current_phase"],
+        "simulationTime": snap["cumulative_sim_time_s"],
+        "gnbs": len(snap["gnbs"]),
     }
+
+
+@router.post("/start")
+def start():
+    runner.start()
+    return {"status": "started", "engine": "simu5g (real opp_run subprocess loop)"}
+
+
+@router.post("/stop")
+def stop():
+    runner.stop()
+    return {"status": "stopped", "cumulative_sim_time_s": runner.cumulative_sim_time}
+
 
 @router.get("/status")
-async def get_system_status():
-    """Provides the current network health for RAG/AI agents."""
-    return {
-        "status": "active",
-        "active_policies": KPIParser._active_policies,
-        "cluster_info": "7-Cell Hexagonal Cluster"
-    }
+def status():
+    return runner.snapshot()
+
+
+@router.get("/gnb/{gnb_id}")
+def gnb_detail(gnb_id: int):
+    detail = runner.gnb_snapshot(gnb_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="gNB not found")
+    return detail
+
+
+@router.post("/remediate")
+def remediate(req: RemediationRequest):
+    """
+    Records a remediation request against a gNB. Applied at the next
+    phase boundary (see TimelineRunner.request_remediation for why —
+    OMNeT++ has no supported live mid-run parameter API).
+    """
+    if not req.gnb_id in runner.gnb_ids:
+        raise HTTPException(status_code=404, detail="gNB not found")
+    runner.request_remediation(req.gnb_id, req.action, detail=req.detail or "")
+    return {"status": "recorded", "gnb_id": req.gnb_id, "action": req.action,
+            "applies_at": "next phase boundary"}
+
+
+# ---------------- legacy compatibility ----------------
+# Kept so existing agent tool-call integrations (Member 3's tools.yaml)
+# that expect POST /simulate keep working. Returns the current real
+# timeline snapshot instead of launching an isolated one-off run.
 
 @router.post("/simulate")
-async def execute_simulation(payload: SimulationRequest):
-    mapped_scenario = SCENARIO_ALIASES.get(payload.scenario, payload.scenario)
-
-    if mapped_scenario not in SUPPORTED_SCENARIOS:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "Unsupported scenario",
-                "requested": payload.scenario,
-                "supported": sorted(SUPPORTED_SCENARIOS),
-            },
-        )
-
-    raw_data = runner.run(mapped_scenario, payload.ue_count)
-
-    metrics = raw_data["metrics"]
-
-    if payload.slice_type == "URLLC":
-        metrics["latency_ms"] = round(max(1.0, metrics["latency_ms"] * 0.2), 2)
-        metrics["packet_loss_percent"] = round(min(0.1, metrics["packet_loss_percent"] * 0.1), 2)
-    elif payload.slice_type == "mMTC":
-        metrics["throughput_mbps"] = round(metrics["throughput_mbps"] * 0.3, 2)
-        metrics["latency_ms"] = round(metrics["latency_ms"] * 1.5, 2)
-
+def simulate_compat(scenario: str = "normal_operation", ue_count: int = 10, slice_type: str = "eMBB"):
+    snap = runner.snapshot()
     return {
         "status": "success",
-        "requested_scenario": payload.scenario,
-        "scenario": mapped_scenario,
-        "ue_count": payload.ue_count,
-        "cell_id": payload.cell_id,
-        "slice_type": payload.slice_type,
-        "data": raw_data,
+        "note": "Legacy endpoint: returns the live real-Simu5G timeline snapshot.",
+        "requested_scenario": scenario,
+        "current_phase": snap["current_phase"],
+        "metrics": snap["last_completed_phase_kpis"].get("aggregate", {}),
+        "live_status": snap,
     }
-
-@router.post("/policy")
-async def apply_network_policy(payload: PolicyRequest):
-    result = KPIParser.apply_policy(payload.sector_id, payload.policy_type)
-    return result
