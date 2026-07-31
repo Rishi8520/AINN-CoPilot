@@ -1,7 +1,77 @@
-# Python local environment and caches
+# Secrets and local credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*credentials*.json
+*credential*.json
+*token*.json
+*api_key*
+*apikey*
+
+# Python local environments and caches
+.venv/
+venv/
+env/
 CODE/.venv/
-__pycache__/
+**/__pycache__/
 *.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Editors and OS metadata
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Model and runtime caches
+.cache/huggingface/
+huggingface/
+hf_cache/
+model_cache/
+models/cache/
+torch_cache/
+.torch/
 
 # RAG local vector database storage
-CODE/RAG/storage/
+CODE/RAG/storage/*
+!CODE/RAG/storage/README.md
+!CODE/RAG/storage/.gitkeep
+CODE/RAG/storage/chroma/
+CODE/RAG/storage/faiss/
+CODE/RAG/storage/qdrant/
+CODE/RAG/storage/weaviate/
+
+# Simulation runtime output
+CODE/Simulation/app/scenarios/results/*
+!CODE/Simulation/app/scenarios/results/README.md
+!CODE/Simulation/app/scenarios/results/.gitkeep
+CODE/Simulation/app/scenarios/generated/*
+!CODE/Simulation/app/scenarios/generated/README.md
+!CODE/Simulation/app/scenarios/generated/.gitkeep
+
+# Logs and temporary files
+*.log
+!evidence/**/*.log
+!submission_evidence/**/*.log
+!performance/**/*.log
+!benchmarks/evidence/**/*.log
+*.tmp
+*.temp
+tmp/
+temp/
+benchmark_outputs/
+benchmark-results/
+local_benchmarks/

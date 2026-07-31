@@ -1,0 +1,201 @@
+# Submission Gap Ledger
+
+## A. Executive summary
+
+AINN-CoPilot / TelcoMind has substantial implementation across Agent, Gateway, UI, RAG, and Simulation components, including Docker assets, tests, knowledge-base material, and a full Simu5G source tree. It is not yet proven submission-ready.
+
+This ledger does not claim compliance with the under-10-minute installation and first-run rule. It also does not claim clean-machine success because no clean-machine deployment test was run in Batch 1.
+
+## B. Exact submission checklist
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Complete runnable source | PARTIAL | Source exists under `CODE/Agent`, `CODE/RAG`, and `CODE/Simulation`; runnable end-to-end state is not yet verified. |
+| One-click deployment | MISSING | No root `docker-compose.yml` or `deploy.sh` found. Subproject compose files exist. |
+| Root README | MISSING | No root `README.md` found. |
+| Root LICENSE | MISSING | No root `LICENSE` found; `CODE/Simulation/simu5g/LICENSE.md` exists only for the vendored Simu5G tree. |
+| Two-page technical report | MISSING | No root `TECHNICAL_REPORT.pdf` found. |
+| Optional demo video | NOT YET VERIFIED | No root README/report exists to link a demo video. |
+| Single-node deployment | NOT YET VERIFIED | Subproject compose files exist, but root single-node orchestration is absent. |
+| CPU/no-GPU quickstart | NOT YET VERIFIED | RAG compose includes optional vLLM configuration; CPU-only default is not proven. |
+| Under-10-minute installation and first run | NOT YET VERIFIED | No timing validation was run. |
+| End-to-end UI/Gateway/Agent/Simulation/RAG/LLM workflow | NOT YET VERIFIED | Components exist, but no end-to-end smoke test was run. |
+| Performance logs/screenshots | MISSING | No root submission evidence bundle was found. |
+| Clean repository/archive | PARTIAL | Ignore rules were strengthened, but large tracked Simulation generated/results artifacts remain for Batch 2. |
+
+## C. Repository evidence
+
+### Existing services/components
+
+- Agent and Gateway: `CODE/Agent/agent.py`, `CODE/Agent/gateway.py`, `CODE/Agent/tools/tools.py`.
+- UI: `CODE/Agent/ui/app.py`.
+- RAG service: `CODE/RAG/app/rag_service.py`, `CODE/RAG/app/vector_store.py`, `CODE/RAG/app/synthesis.py`.
+- Simulation API and runner: `CODE/Simulation/app/main.py`, `CODE/Simulation/app/api/routes.py`, `CODE/Simulation/app/simulator`.
+- Vendored simulation source: `CODE/Simulation/simu5g`.
+
+### Existing tests
+
+- RAG tests: `CODE/RAG/tests/test_contracts.py`.
+- Agent evaluation assets: `CODE/Agent/eval/benchmark.py`, `CODE/Agent/eval/test_cases.json`.
+- Simu5G fingerprint tests are present in `CODE/Simulation/simu5g/tests/fingerprint`.
+
+### Docker/Compose files
+
+- `CODE/Agent/Dockerfile.gateway`
+- `CODE/Agent/ui/Dockerfile`
+- `CODE/Agent/docker-compose.yml`
+- `CODE/RAG/Dockerfile.rag`
+- `CODE/RAG/docker-compose.yml`
+- `CODE/Simulation/Dockerfile`
+- `CODE/Simulation/docker-compose.yml`
+
+No root compose file was found.
+
+### Environment examples
+
+- `CODE/.env.example` is tracked.
+- No tracked `.env` file was found.
+- A local `CODE/.venv` directory exists in the working tree and should remain untracked.
+
+### Large/runtime-generated artifacts
+
+- `CODE/Simulation/app/scenarios/results`: 515 files, about 958.7 MiB, 515 tracked files.
+- `CODE/Simulation/app/scenarios/generated`: 487 files, about 2.2 MiB, 487 tracked files.
+- Batch 1 intentionally left both directories untouched for Batch 2 fixture preservation and cleanup.
+
+### Root deliverables
+
+- Root `.gitignore` exists.
+- Root `README.md`, `LICENSE`, `TECHNICAL_REPORT.pdf`, `docker-compose.yml`, and `deploy.sh` were not found.
+
+### RAG data/index state
+
+- RAG knowledge base PDFs and runbooks are tracked under `CODE/RAG/knowledge_base`.
+- Local runtime vector storage exists at `CODE/RAG/storage/chroma`, about 143.6 MiB, not tracked.
+- No prebuilt quickstart index strategy is documented at the root.
+
+### Simulation build/runtime state
+
+- Simulation API, Dockerfile, compose file, scenarios, and Simu5G source tree exist.
+- `CODE/Simulation/simu5g.tar.gz` was a zero-byte tracked file and was removed as an invalid/disposable incomplete archive.
+- Empty runtime file `CODE/Simulation/.cmdenv-log` was removed.
+
+### Agent/Gateway/UI state
+
+- Gateway exposes `/v1/health`, `/health`, `/v1/agent/status`, and `/v1/chat`.
+- UI defaults to `GATEWAY_URL=http://localhost:8080`.
+- Agent defaults `LLM_ENDPOINT_URL` to `http://localhost:8080`.
+- Tool defaults point Simulation to `http://localhost:8888` and RAG to `http://localhost:8889`.
+
+### Conflicting or stale endpoint configuration discovered
+
+- `CODE/Simulation/docker-compose.yml` runs Simulation on container port `7000`.
+- `CODE/RAG/docker-compose.yml` runs RAG health on `7000` and maps optional vLLM `8080:8000`.
+- Agent tool defaults use `8888` for Simulation and `8889` for RAG.
+- `CODE/Agent/tools/tools.py` still mentions Tailscale in comments and error hints.
+
+## D. Blocker categories
+
+### Repository hygiene and size
+
+The broader local working tree previously measured about 6.9 GiB when ignored local environments and caches were included. The Windows-safe hygiene validator now reports accessible non-cache local content separately from Git-tracked submission content: about 1.1 GiB across 1,137 accessible files locally, and about 1008.0 MiB across 1,129 accessible tracked files. Large tracked Simulation result/generated artifacts remain and need Batch 2 cleanup after preserving small traceable fixtures.
+
+### One-click deployment
+
+No root `docker-compose.yml` or `deploy.sh` exists. Subproject compose files are not yet unified into a single submission quickstart.
+
+### Port and network configuration
+
+Detected defaults disagree across components: Simulation compose uses port `7000`, RAG uses `7000`, Agent tools default to `8888` and `8889`, and UI defaults to Gateway `8080`.
+
+### API-contract alignment
+
+Gateway, Agent, RAG, and Simulation endpoints exist, but no end-to-end contract smoke test was run in Batch 1.
+
+### Tailscale assumptions
+
+`CODE/Agent/tools/tools.py` contains Tailscale-oriented comments and error hints. Submission quickstart must not require Tailscale or teammate-machine services.
+
+### RAG fresh-clone/index readiness
+
+Knowledge-base files exist, but local Chroma runtime storage is untracked. Fresh-clone RAG readiness is not proven.
+
+### Full RAG-ingestion duration
+
+No full ingestion was run. The default quickstart must avoid full PDF ingestion and keep full-corpus ingestion as an optional rebuild.
+
+### CPU/no-GPU fallback
+
+CPU-safe behavior is not yet proven. The default quickstart must not require GPU or vLLM.
+
+### vLLM/GPU optional mode
+
+RAG compose includes vLLM-related configuration. GPU vLLM should remain available as an optional enhanced profile, not the default requirement.
+
+### Simulation quickstart versus real Simu5G mode
+
+The repository includes real Simu5G assets and many runtime outputs. A small quickstart/replay mode needs to be separated from full simulation mode.
+
+### Truthful Simulation health/readiness
+
+Health endpoints must not report success when required runtime dependencies fail. This needs targeted validation in later batches.
+
+### Test coverage
+
+Some tests and evaluation assets exist, but full service and end-to-end smoke coverage is not established.
+
+### Performance evidence
+
+No root performance log or screenshot evidence package was found.
+
+### Documentation
+
+Root README and operator quickstart documentation are missing.
+
+### License
+
+Root license is missing.
+
+### Technical report
+
+Two-page technical report is missing.
+
+### Video/demo materials
+
+No root-linked demo video evidence was found.
+
+### EvalAI frozen submission packaging
+
+No tagged commit/archive workflow is documented. The final uploaded EvalAI archive is a static snapshot and should correspond to a tagged Git commit.
+
+## E. Important architectural principles for remediation
+
+- Tailscale must not be required for single-node submission.
+- Default quickstart must not perform full PDF ingestion.
+- Default quickstart must not require GPU/vLLM.
+- Full-corpus ingestion should remain available as an optional rebuild.
+- GPU vLLM should remain available as an optional enhanced profile.
+- Generated simulation outputs should not dominate the Git repository.
+- Any quickstart/replay fixtures must be small, traceable, and clearly labelled.
+- Health endpoints must not report success when critical runtime dependencies have failed.
+- The final uploaded EvalAI archive is a static snapshot and should correspond to a tagged Git commit.
+
+## F. Ordered 15-batch remediation plan
+
+| Batch | Goal | Expected files/components | Acceptance gate | Risks |
+| --- | --- | --- | --- | --- |
+| 1. Repository hygiene and readiness ledger | Establish safe ignore rules, remove disposable tracked artifacts, and create this evidence ledger. | `.gitignore`, `CODE/.gitignore`, `SUBMISSION_GAP_LEDGER.md`, `scripts/check_repo_hygiene.py`. | Hygiene script passes with no Batch 1 FAIL findings. | Accidentally hiding required fixtures or overclaiming readiness. |
+| 2. Simulation artifact cleanup and traceable fixtures | Preserve small evidence fixtures, then remove tracked bulk generated/results artifacts. | `CODE/Simulation/app/scenarios/results`, `CODE/Simulation/app/scenarios/generated`, fixture README files. | Repository no longer tracks bulk runtime output; fixtures are documented and reproducible. | Deleting evidence before preserving traceability. |
+| 3. Canonical ports, environment, and API contracts | Define one local port map and shared env contract. | Root env example, service config docs, compose env wiring. | UI, Gateway, Agent, RAG, and Simulation agree on URLs and ports. | Breaking existing teammate-specific defaults without compatibility notes. |
+| 4. Simulation dual-mode design | Separate quickstart replay/fixture mode from real Simu5G execution. | Simulation config, fixture loader, real runner path. | Quickstart works without compiling full Simu5G; real mode remains available. | Health/readiness could blur fixture mode and real mode. |
+| 5. RAG quickstart/prebuilt-index strategy | Avoid full ingestion in default demo while preserving rebuild path. | Small prebuilt/demo index or fixture corpus, ingestion docs. | Fresh clone can answer demo RAG queries quickly. | Shipping stale or oversized index artifacts. |
+| 6. CPU/no-GPU LLM and OPEA fallback strategy | Make default LLM path CPU-safe while keeping OPEA/GPU options. | Env profiles, fallback docs, optional vLLM profile. | Demo flow works on CPU-only single node. | Quality or latency regressions in CPU fallback. |
+| 7. Root one-click Compose/deploy script | Add root deployment entry point. | `docker-compose.yml`, `deploy.sh`, root `.env.example`. | One documented command starts the submission stack. | Port conflicts, slow image builds, missing health checks. |
+| 8. Automated tests | Add focused unit and contract tests for critical interfaces. | Tests under component test folders and root smoke helpers. | Lightweight tests pass without Docker/model startup. | Tests becoming coupled to unavailable services. |
+| 9. End-to-end smoke test | Add single-node smoke path across UI/Gateway/Agent/RAG/Simulation/LLM. | Smoke script and expected outputs. | Smoke test validates a cited response and simulation KPI path. | Flaky startup timing and health checks. |
+| 10. Four-core performance validation and optimization | Measure and tune install/demo under competition constraints. | Benchmark logs, timing scripts, optimization notes. | Evidence shows first run within target hardware assumptions. | Hardware variability and model download time. |
+| 11. CI and optional prebuilt image publishing | Add CI checks and optionally publish images for faster setup. | GitHub Actions, image docs, tags. | CI validates hygiene, tests, and smoke where feasible. | CI secrets or registry setup complexity. |
+| 12. Root README and operator documentation | Write complete root operator docs. | `README.md`, architecture diagrams or links. | README includes overview, setup, requirements, outcomes, commands, endpoints/URLs. | Docs drifting from actual commands. |
+| 13. License and two-page technical report | Add compliant license and concise report. | `LICENSE`, `TECHNICAL_REPORT.pdf`. | License is Apache 2.0 or MIT; report is no more than two pages. | Third-party license obligations need review. |
+| 14. UI/demo/video package | Prepare demo flow and optional video. | Demo script, screenshots, video link in docs. | 1-3 minute demo demonstrates core workflow truthfully. | Demo depending on local-only state. |
+| 15. Clean-room submission audit and tagged archive | Validate a fresh clone and produce final static archive. | Tag, release/archive notes, final audit log. | Clean-machine run passes; EvalAI archive matches tagged commit. | Last-minute generated files or missing large assets. |
