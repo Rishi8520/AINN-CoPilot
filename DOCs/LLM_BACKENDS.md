@@ -84,6 +84,10 @@ Retrieved text is treated as data, not instructions. The system prompt tells the
 
 vLLM is one optional OpenAI-compatible implementation. It is not part of default startup, does not run in quickstart, and requires separate GPU/NVIDIA Container Toolkit support.
 
+The Batch 7 root Compose file keeps vLLM behind the optional `gpu-llm` profile
+on port `8080`. The profile is not pulled, built, started, or required by the
+default deployment scripts, and remains unverified in this batch.
+
 Development-tested reference path only:
 
 ```powershell

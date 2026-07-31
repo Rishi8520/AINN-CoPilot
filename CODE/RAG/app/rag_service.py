@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException, Response
 from app import config
-from app.loaders import load_knowledge_base
 from app.lexical_retriever import LexicalBM25Retriever
 from app.quickstart_corpus import CorpusValidationError, load_quickstart_corpus
 from app.schemas import (
@@ -139,6 +138,8 @@ async def ingest():
             status_code=409,
             detail="Ingestion is available only with RAG_PROFILE=full and must be invoked explicitly.",
         )
+    from app.loaders import load_knowledge_base
+
     chunks = load_knowledge_base(config.KNOWLEDGE_BASE_DIR)
     indexed = TelcoVectorIngestStore().ingest(chunks)
     return IngestResponse(

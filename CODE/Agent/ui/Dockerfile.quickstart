@@ -1,0 +1,21 @@
+FROM python:3.11.10-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+ENV HOME=/tmp
+
+WORKDIR /app
+
+RUN groupadd --system telcomind && useradd --system --gid telcomind --home-dir /tmp telcomind
+
+COPY CODE/Agent/ui/requirements.quickstart.txt ./requirements.quickstart.txt
+RUN pip install --no-cache-dir -r requirements.quickstart.txt
+
+COPY --chown=telcomind:telcomind CODE/Agent/ui/app.py ./app.py
+
+USER telcomind
+
+EXPOSE 8501
+
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--browser.gatherUsageStats=false", "--server.headless=true"]

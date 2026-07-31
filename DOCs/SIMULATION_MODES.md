@@ -61,6 +61,11 @@ provenance for one recorded healthy bootstrap run. It does not prove current
 live Simu5G execution, fault/degraded behavior, Docker startup, live vector
 polling, or dynamic request-parameter application.
 
+In the Batch 7 root Compose quickstart, the `simulation` service uses
+`CODE/Simulation/Dockerfile.quickstart`. That image installs only the FastAPI
+runtime and copies the committed replay fixture. It does not download, build,
+or execute OMNeT++, INET, or Simu5G.
+
 ## Live Mode
 
 Live mode uses the existing `TimelineRunner` and requires

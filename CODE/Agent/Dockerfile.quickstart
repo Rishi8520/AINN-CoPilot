@@ -1,0 +1,22 @@
+FROM python:3.11.10-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN groupadd --system telcomind && useradd --system --gid telcomind --home-dir /app telcomind
+
+COPY CODE/Agent/requirements.quickstart.txt ./requirements.quickstart.txt
+RUN pip install --no-cache-dir -r requirements.quickstart.txt
+
+COPY --chown=telcomind:telcomind CODE/Agent/agent.py ./agent.py
+COPY --chown=telcomind:telcomind CODE/Agent/agent_service.py ./agent_service.py
+COPY --chown=telcomind:telcomind CODE/Agent/gateway.py ./gateway.py
+COPY --chown=telcomind:telcomind CODE/Agent/tools ./tools
+
+USER telcomind
+
+EXPOSE 8888 9090
+
+CMD ["uvicorn", "agent_service:app", "--host", "0.0.0.0", "--port", "9090"]

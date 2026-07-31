@@ -1,5 +1,13 @@
 # Submission Gap Ledger
 
+## Batch 7 Update - Root Quickstart Deployment
+
+- Added root `docker-compose.yml` for the CPU-safe single-node quickstart stack.
+- Added `deploy.sh`, `deploy.ps1`, and `scripts/smoke_test.py` for one-click deploy, status, logs, down, and verification flows.
+- Added quickstart Dockerfiles and requirements for Simulation replay, RAG lexical quickstart, Agent/Gateway, and UI.
+- Default stack remains GPU-free, Tailscale-free, vLLM-free, Chroma-free, full-ingestion-free, live-Simu5G-free, and deterministic for synthesis.
+- Root README, LICENSE, final report, formal under-10-minute timing, full RAG, live Simu5G, and optional vLLM runtime validation remain deferred.
+
 ## A. Executive summary
 
 AINN-CoPilot / TelcoMind has substantial implementation across Agent, Gateway, UI, RAG, and Simulation components, including Docker assets, tests, knowledge-base material, and a full Simu5G source tree. It is not yet proven submission-ready.

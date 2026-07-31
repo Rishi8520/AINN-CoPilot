@@ -1,0 +1,230 @@
+name: ${COMPOSE_PROJECT_NAME:-telcomind-quickstart}
+
+services:
+  simulation:
+    build:
+      context: .
+      dockerfile: CODE/Simulation/Dockerfile.quickstart
+    image: telcomind/simulation-quickstart:batch7
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/app/scenarios/results/history
+    environment:
+      SIMULATION_DEFAULT_MODE: ${SIMULATION_DEFAULT_MODE:-replay}
+      SIMULATION_REPLAY_FIXTURE: ${SIMULATION_REPLAY_FIXTURE:-phase_bootstrap_normal}
+      SIMULATION_REPLAY_STRICT_CHECKSUMS: ${SIMULATION_REPLAY_STRICT_CHECKSUMS:-true}
+      SIMULATION_LIVE_ENABLED: ${SIMULATION_LIVE_ENABLED:-false}
+    ports:
+      - "${HOST_SIMULATION_PORT:-7000}:7000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7000/ready', timeout=5).read()",
+        ]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 10s
+    restart: on-failure:3
+    stop_grace_period: 20s
+    networks:
+      - telcomind
+
+  rag:
+    build:
+      context: .
+      dockerfile: CODE/RAG/Dockerfile.quickstart
+    image: telcomind/rag-quickstart:batch7
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      RAG_PROFILE: ${RAG_PROFILE:-quickstart}
+      RAG_QUICKSTART_CORPUS_PATH: ${RAG_QUICKSTART_CORPUS_PATH:-quickstart/corpus.jsonl}
+      RAG_QUICKSTART_TOP_K: ${RAG_QUICKSTART_TOP_K:-5}
+      RAG_FULL_INDEX_PATH: ${RAG_FULL_INDEX_PATH:-/tmp/chroma-disabled}
+      RAG_AUTO_INGEST: ${RAG_AUTO_INGEST:-false}
+      RAG_STRICT_PROVENANCE: ${RAG_STRICT_PROVENANCE:-true}
+      RAG_SYNTHESIS_BACKEND: ${RAG_SYNTHESIS_BACKEND:-deterministic}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai_compatible}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_REQUIRED: ${LLM_REQUIRED:-false}
+      LLM_FALLBACK_TO_DETERMINISTIC: ${LLM_FALLBACK_TO_DETERMINISTIC:-true}
+      LLM_CONNECT_TIMEOUT_SECONDS: ${LLM_CONNECT_TIMEOUT_SECONDS:-3}
+      LLM_READ_TIMEOUT_SECONDS: ${LLM_READ_TIMEOUT_SECONDS:-30}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0}
+      LLM_ENABLED: ${LLM_ENABLED:-false}
+      RAG_DEVICE: ${RAG_DEVICE:-cpu}
+    ports:
+      - "${HOST_RAG_PORT:-7001}:7001"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7001/ready', timeout=5).read()",
+        ]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 10s
+    restart: on-failure:3
+    stop_grace_period: 20s
+    networks:
+      - telcomind
+
+  agent:
+    build:
+      context: .
+      dockerfile: CODE/Agent/Dockerfile.quickstart
+    image: telcomind/agent-quickstart:batch7
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    command: ["uvicorn", "agent_service:app", "--host", "0.0.0.0", "--port", "9090"]
+    environment:
+      SIMULATION_BASE_URL: http://simulation:7000
+      RAG_BASE_URL: http://rag:7001
+      AGENT_BASE_URL: http://agent:9090
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_REQUIRED: ${LLM_REQUIRED:-false}
+      AGENT_REQUEST_TIMEOUT_SECONDS: ${AGENT_REQUEST_TIMEOUT_SECONDS:-60}
+    ports:
+      - "${HOST_AGENT_PORT:-9090}:9090"
+    depends_on:
+      simulation:
+        condition: service_healthy
+      rag:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9090/v1/health_check', timeout=5).read()",
+        ]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 10s
+    restart: on-failure:3
+    stop_grace_period: 20s
+    networks:
+      - telcomind
+
+  gateway:
+    build:
+      context: .
+      dockerfile: CODE/Agent/Dockerfile.quickstart
+    image: telcomind/agent-quickstart:batch7
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    command: ["uvicorn", "gateway:app", "--host", "0.0.0.0", "--port", "8888"]
+    environment:
+      AGENT_BASE_URL: http://agent:9090
+      AGENT_ENDPOINT: http://agent:9090
+      GATEWAY_PORT: "8888"
+      SIMULATION_BASE_URL: http://simulation:7000
+      RAG_BASE_URL: http://rag:7001
+      SIM_HEALTH_PATH: /health
+      RAG_HEALTH_PATH: /health
+      AGENT_HEALTH_PATH: /v1/health_check
+      HEALTH_PROBE_TIMEOUT_SECONDS: ${HEALTH_PROBE_TIMEOUT_SECONDS:-4}
+      STARTUP_PROBE_RETRIES: ${STARTUP_PROBE_RETRIES:-5}
+      STARTUP_PROBE_DELAY_SECONDS: ${STARTUP_PROBE_DELAY_SECONDS:-3}
+    ports:
+      - "${HOST_GATEWAY_PORT:-8888}:8888"
+    depends_on:
+      agent:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8888/v1/health', timeout=5).read()",
+        ]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 10s
+    restart: on-failure:3
+    stop_grace_period: 20s
+    networks:
+      - telcomind
+
+  ui:
+    build:
+      context: .
+      dockerfile: CODE/Agent/ui/Dockerfile.quickstart
+    image: telcomind/ui-quickstart:batch7
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      GATEWAY_BASE_URL: http://gateway:8888
+      GATEWAY_URL: http://gateway:8888
+      UI_REQUEST_TIMEOUT_SECONDS: ${UI_REQUEST_TIMEOUT_SECONDS:-180}
+    ports:
+      - "${HOST_UI_PORT:-8501}:8501"
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/healthz', timeout=5).read()",
+        ]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 20s
+    restart: on-failure:3
+    stop_grace_period: 20s
+    networks:
+      - telcomind
+
+  vllm:
+    profiles:
+      - gpu-llm
+    image: nvcr.io/nvidia/vllm:26.05.post1-py3
+    init: true
+    command:
+      [
+        "vllm",
+        "serve",
+        "${VLLM_MODEL:-Qwen/Qwen2.5-0.5B-Instruct}",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8080",
+      ]
+    environment:
+      VLLM_MODEL: ${VLLM_MODEL:-Qwen/Qwen2.5-0.5B-Instruct}
+    ports:
+      - "${HOST_VLLM_PORT:-8080}:8080"
+    networks:
+      - telcomind
+
+networks:
+  telcomind:
+    name: ${COMPOSE_PROJECT_NAME:-telcomind-quickstart}_net

@@ -14,6 +14,11 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+try:
+    import yaml
+except ImportError:  # pragma: no cover - reported as a hygiene failure when needed.
+    yaml = None
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SIM_RESULTS = Path("CODE/Simulation/app/scenarios/results")
@@ -39,6 +44,8 @@ REQUIRED_ROOT_FILES = [
     "TECHNICAL_REPORT.pdf",
     "docker-compose.yml",
     "deploy.sh",
+    "deploy.ps1",
+    ".dockerignore",
 ]
 SERVICE_CONTRACT = Path("contracts/services.json")
 SIMULATION_DEFAULT_EXAMPLES = [
@@ -48,6 +55,7 @@ SIMULATION_DEFAULT_EXAMPLES = [
 ]
 ACTIVE_NETWORK_CONFIG_FILES = [
     Path(".env.example"),
+    Path("docker-compose.yml"),
     Path("CODE/.env.example"),
     Path("CODE/Agent/tools/tools.py"),
     Path("CODE/Agent/agent.py"),
@@ -59,6 +67,7 @@ ACTIVE_NETWORK_CONFIG_FILES = [
 ]
 SYNTHESIS_DEFAULT_FILES = [
     Path(".env.example"),
+    Path("docker-compose.yml"),
     Path("CODE/.env.example"),
     Path("CODE/RAG/.env.example"),
     Path("CODE/RAG/docker-compose.yml"),
@@ -67,6 +76,11 @@ FORBIDDEN_ACTIVE_NETWORK_PATTERNS = [
     re.compile(r"Tailscale", re.IGNORECASE),
     re.compile(r"https?://100\.\d{1,3}\.\d{1,3}\.\d{1,3}"),
 ]
+ROOT_COMPOSE = Path("docker-compose.yml")
+ROOT_DEPLOY_SH = Path("deploy.sh")
+ROOT_DEPLOY_PS1 = Path("deploy.ps1")
+ROOT_DOCKERIGNORE = Path(".dockerignore")
+ROOT_SMOKE_TEST = Path("scripts/smoke_test.py")
 CREDENTIAL_BEARING_URL = re.compile(r"https?://[^/\s:@]+:[^@\s/]+@")
 TRACKED_CACHE_PATTERNS = [
     "*/__pycache__/*",
@@ -639,6 +653,112 @@ def main() -> int:
             emit("PASS", f"required root file present: {filename}", counts)
         else:
             emit("WARN", f"future submission deliverable missing at root: {filename}", counts)
+
+    root_deployment_findings = []
+    root_compose_path = ROOT / ROOT_COMPOSE
+    root_compose = None
+    if not root_compose_path.exists():
+        root_deployment_findings.append("root docker-compose.yml is missing")
+    elif yaml is None:
+        try:
+            result = subprocess.run(
+                ["docker", "compose", "--project-directory", str(ROOT), "config", "--format", "json"],
+                cwd=ROOT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True,
+            )
+            root_compose = json.loads(result.stdout)
+        except Exception as exc:
+            root_deployment_findings.append(
+                f"PyYAML is unavailable and docker compose config could not parse root docker-compose.yml: {exc}"
+            )
+    else:
+        try:
+            root_compose = yaml.safe_load(root_compose_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            root_deployment_findings.append(f"root docker-compose.yml cannot be parsed: {exc}")
+
+    if root_compose:
+        services = root_compose.get("services", {})
+        required_services = {"simulation", "rag", "agent", "gateway", "ui"}
+        missing_services = sorted(required_services - set(services))
+        if missing_services:
+            root_deployment_findings.append(f"missing required root services: {missing_services}")
+        compose_source_text = root_compose_path.read_text(encoding="utf-8", errors="replace")
+        vllm = services.get("vllm")
+        if vllm is not None and vllm.get("profiles") != ["gpu-llm"]:
+            root_deployment_findings.append("vllm is not isolated behind the gpu-llm profile")
+        if vllm is None and "gpu-llm" not in compose_source_text:
+            root_deployment_findings.append("vllm optional gpu-llm profile is not visible in root compose source")
+        for service_name in required_services:
+            service = services.get(service_name, {})
+            if "healthcheck" not in service:
+                root_deployment_findings.append(f"{service_name} lacks a healthcheck")
+            if "profiles" in service:
+                root_deployment_findings.append(f"{service_name} is incorrectly profile-gated")
+            if service.get("privileged") is True:
+                root_deployment_findings.append(f"{service_name} uses privileged mode")
+            if service.get("network_mode") == "host":
+                root_deployment_findings.append(f"{service_name} uses host networking")
+            if "deploy" in service and re.search(r"gpu|nvidia", json.dumps(service.get("deploy"), sort_keys=True), re.IGNORECASE):
+                root_deployment_findings.append(f"{service_name} has a GPU reservation")
+            for volume in service.get("volumes", []):
+                volume_text = str(volume)
+                source = volume_text.split(":", 1)[0]
+                if "/var/run/docker.sock" in volume_text:
+                    root_deployment_findings.append(f"{service_name} mounts the Docker socket")
+                if Path(source).is_absolute():
+                    root_deployment_findings.append(f"{service_name} uses an absolute bind mount: {source}")
+        compose_text = root_compose_path.read_text(encoding="utf-8", errors="replace")
+        required_fragments = [
+            "SIMULATION_DEFAULT_MODE: ${SIMULATION_DEFAULT_MODE:-replay}",
+            "SIMULATION_LIVE_ENABLED: ${SIMULATION_LIVE_ENABLED:-false}",
+            "RAG_PROFILE: ${RAG_PROFILE:-quickstart}",
+            "RAG_AUTO_INGEST: ${RAG_AUTO_INGEST:-false}",
+            "RAG_SYNTHESIS_BACKEND: ${RAG_SYNTHESIS_BACKEND:-deterministic}",
+            "LLM_REQUIRED: ${LLM_REQUIRED:-false}",
+            "http://simulation:7000",
+            "http://rag:7001",
+            "http://agent:9090",
+            "HOST_SIMULATION_PORT",
+            "HOST_RAG_PORT",
+            "HOST_GATEWAY_PORT",
+            "HOST_AGENT_PORT",
+            "HOST_UI_PORT",
+        ]
+        for fragment in required_fragments:
+            if fragment not in compose_text:
+                root_deployment_findings.append(f"root compose missing expected fragment: {fragment}")
+        if "host.docker.internal" in compose_text:
+            root_deployment_findings.append("root compose uses host.docker.internal")
+        if re.search(r"LLM_API_KEY:\s+[^$\n]+", compose_text):
+            root_deployment_findings.append("root compose appears to contain a literal LLM_API_KEY value")
+
+    for rel_path in [ROOT_DEPLOY_SH, ROOT_DEPLOY_PS1, ROOT_DOCKERIGNORE, ROOT_SMOKE_TEST]:
+        if not (ROOT / rel_path).exists():
+            root_deployment_findings.append(f"{rel_path.as_posix()} is missing")
+    deploy_sh_path = ROOT / ROOT_DEPLOY_SH
+    if deploy_sh_path.exists() and b"\r\n" in deploy_sh_path.read_bytes():
+        root_deployment_findings.append("deploy.sh has CRLF line endings")
+    dockerignore_path = ROOT / ROOT_DOCKERIGNORE
+    if dockerignore_path.exists():
+        dockerignore_text = dockerignore_path.read_text(encoding="utf-8", errors="replace")
+        for required_pattern in ["CODE/RAG/storage", "**/model_cache", "CODE/Simulation/app/scenarios/results/*"]:
+            if required_pattern not in dockerignore_text:
+                root_deployment_findings.append(f".dockerignore missing exclusion: {required_pattern}")
+        for forbidden_pattern in ["CODE/RAG/quickstart", "CODE/Simulation/fixtures"]:
+            if forbidden_pattern in dockerignore_text:
+                root_deployment_findings.append(f".dockerignore excludes required quickstart input: {forbidden_pattern}")
+
+    if root_deployment_findings:
+        emit("FAIL", f"root quickstart deployment hygiene failures: {len(root_deployment_findings)}", counts)
+        print_limited("root deployment findings", root_deployment_findings)
+    else:
+        emit("PASS", "root quickstart deployment files and safe defaults validate", counts)
 
     contract_path = ROOT / SERVICE_CONTRACT
     if contract_path.exists():

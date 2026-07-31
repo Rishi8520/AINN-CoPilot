@@ -33,7 +33,7 @@
     {
       "name": "vllm",
       "host_port": 8080,
-      "container_port": 8000,
+      "container_port": 8080,
       "base_url_env": "LLM_BASE_URL",
       "native_url": "http://localhost:8080",
       "docker_url": "http://vllm:8080",

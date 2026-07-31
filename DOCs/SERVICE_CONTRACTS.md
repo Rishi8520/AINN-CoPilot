@@ -1,6 +1,6 @@
 # Service Contracts
 
-Batch 3 establishes a single-node service contract for AINN-CoPilot / TelcoMind. Tailscale is not required for submission operation. Native host execution may use `localhost`; Docker/container execution must use service DNS names on a shared Docker network created later in Batch 7.
+Batch 3 establishes a single-node service contract for AINN-CoPilot / TelcoMind. Batch 7 adds the root Docker Compose quickstart that consumes these names. Tailscale is not required for submission operation. Native host execution may use `localhost`; Docker/container execution uses service DNS names on the shared root Compose network.
 
 ## Canonical Services
 
@@ -8,7 +8,7 @@ Batch 3 establishes a single-node service contract for AINN-CoPilot / TelcoMind.
 | --- | ---: | ---: | --- | --- | --- |
 | Simulation API | 7000 | 7000 | `http://localhost:7000` | `http://simulation:7000` | `/health` liveness, `/ready` readiness |
 | RAG API | 7001 | 7001 | `http://localhost:7001` | `http://rag:7001` | `/health` liveness, `/ready` readiness |
-| Optional OpenAI-compatible/vLLM API | 8080 | 8000 | `http://localhost:8080` | `http://vllm:8080` | image-dependent `/health` |
+| Optional OpenAI-compatible/vLLM API | 8080 | 8080 | `http://localhost:8080` | `http://vllm:8080` | image-dependent `/health` |
 | Gateway API | 8888 | 8888 | `http://localhost:8888` | `http://gateway:8888` | `/v1/health`, `/health` |
 | Agent API | 9090 | 9090 | `http://localhost:9090` | `http://agent:9090` | `/v1/health_check` |
 | UI/Streamlit | 8501 | 8501 | `http://localhost:8501` | `http://ui:8501` | `/healthz` |
@@ -207,4 +207,4 @@ Compatibility aliases retained: Simulation query parameters on `/simulate`, RAG 
 
 Deferred to Batch 4: true Simulation replay/live dual-mode behavior, per-request scenario/UE/cell/slice application, seeded replay, and truthful readiness semantics for those modes.
 
-Deferred to Batch 7: root `docker-compose.yml`, root `deploy.sh`, one-click network creation, and final service dependency ordering.
+Batch 7 root quickstart files: `docker-compose.yml`, `deploy.sh`, `deploy.ps1`, and `scripts/smoke_test.py`. The default stack starts `simulation`, `rag`, `agent`, `gateway`, and `ui`; optional `vllm` is behind the `gpu-llm` profile and is not part of default readiness.

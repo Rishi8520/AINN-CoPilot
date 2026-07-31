@@ -24,6 +24,13 @@ Structured retrieval responses include `rag_profile`, `retrieval_backend`, `corp
 
 Quickstart lexical BM25 scores are raw ranking scores. They are not confidence, probability, calibrated scores, or semantic similarity.
 
+In the Batch 7 root Compose quickstart, the `rag` service uses
+`CODE/RAG/Dockerfile.quickstart`. The image copies the quickstart corpus and
+the committed source files referenced by `quickstart/manifest.json` so strict
+provenance can validate source hashes. Startup does not run `/ingest`, build
+Chroma, initialize BGE embeddings, initialize a reranker, download model
+weights, or contact vLLM.
+
 ## Health And Readiness
 
 - `GET /health` is process liveness only.
