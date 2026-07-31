@@ -6,6 +6,9 @@ from pathlib import Path
 
 RAG_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAG_ROOT))
+for module_name in list(sys.modules):
+    if module_name == "app" or module_name.startswith("app."):
+        sys.modules.pop(module_name, None)
 
 if importlib.util.find_spec("chromadb") is None:
     chromadb_stub = types.ModuleType("chromadb")
@@ -144,6 +147,62 @@ def test_external_embedding_and_reranker_config_can_be_parsed(monkeypatch):
         assert reloaded.RERANKER_TIMEOUT_SECONDS == 11
 
     importlib.reload(config)
+
+
+def test_vllm_base_url_is_canonical_llm_endpoint(monkeypatch):
+    with monkeypatch.context() as env:
+        env.setenv("VLLM_BASE_URL", " http://vllm:8080/ ")
+        env.setenv("LLM_ENDPOINT_URL", "http://legacy-llm:8080")
+
+        reloaded = importlib.reload(config)
+
+        assert reloaded.LLM_ENDPOINT_URL == "http://vllm:8080"
+
+    importlib.reload(config)
+
+
+def test_vllm_legacy_alias_used_only_when_canonical_absent(monkeypatch):
+    with monkeypatch.context() as env:
+        env.delenv("VLLM_BASE_URL", raising=False)
+        env.setenv("LLM_ENDPOINT_URL", " http://legacy-llm:8080/ ")
+
+        reloaded = importlib.reload(config)
+
+        assert reloaded.LLM_ENDPOINT_URL == "http://legacy-llm:8080"
+
+    importlib.reload(config)
+
+
+def test_rag_route_constants_match_canonical_paths():
+    service_source = (RAG_ROOT / "app" / "rag_service.py").read_text(encoding="utf-8")
+
+    assert 'HEALTH_PATH = "/health"' in service_source
+    assert 'RETRIEVE_PATH = "/v1/retrievaltool/json"' in service_source
+    assert 'RETRIEVE_TEXT_COMPAT_PATH = "/v1/retrievaltool"' in service_source
+    assert 'SYNTHESIZE_PATH = "/synthesize"' in service_source
+    assert "@app.post(RETRIEVE_PATH" in service_source
+
+
+def test_rag_routes_can_register_without_model_loading(monkeypatch):
+    class FakeStore:
+        def count(self):
+            return 0
+
+        def search(self, query, top_k):
+            return []
+
+    import app.vector_store as vector_store_module
+
+    monkeypatch.setattr(vector_store_module, "TelcoVectorStore", lambda: FakeStore())
+    sys.modules.pop("app.rag_service", None)
+
+    service = importlib.import_module("app.rag_service")
+    paths = {route.path for route in service.app.routes}
+
+    assert "/health" in paths
+    assert "/v1/retrievaltool/json" in paths
+    assert "/v1/retrievaltool" in paths
+    assert "/synthesize" in paths
 
 
 def test_external_embedding_failure_falls_back_to_local_model(monkeypatch):

@@ -6,11 +6,20 @@ services:
       dockerfile: Simulation/Dockerfile
     container_name: telcomind-backend
     command: uvicorn app.main:app --host 0.0.0.0 --port 7000
+    environment:
+      SIMULATION_DEFAULT_MODE: ${SIMULATION_DEFAULT_MODE:-replay}
+      SIMULATION_REPLAY_FIXTURE: ${SIMULATION_REPLAY_FIXTURE:-phase_bootstrap_normal}
+      SIMULATION_REPLAY_STRICT_CHECKSUMS: ${SIMULATION_REPLAY_STRICT_CHECKSUMS:-true}
+      SIMULATION_LIVE_ENABLED: ${SIMULATION_LIVE_ENABLED:-false}
+    volumes:
+      - ./fixtures:/workspace/fixtures:ro
+      - ./app/scenarios/results:/workspace/app/scenarios/results
+      - ./app/scenarios/generated:/workspace/app/scenarios/generated
     ports:
-      - "7000:7000"
+      - "${SIMULATION_PORT:-7000}:7000"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:7000/ready"]
       interval: 20s
       timeout: 5s
       retries: 3

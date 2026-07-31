@@ -1,6 +1,8 @@
 import hashlib
 import json
+import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -11,8 +13,12 @@ FIXTURE_ROOT = SIM_ROOT / "fixtures" / "replay" / "phase_bootstrap_normal"
 RUNTIME_RESULTS = SIM_ROOT / "app" / "scenarios" / "results"
 
 sys.path.insert(0, str(SIM_ROOT))
+for module_name in list(sys.modules):
+    if module_name == "app" or module_name.startswith("app."):
+        sys.modules.pop(module_name, None)
 
 from app.simulator.kpi_parser import KPIParser  # noqa: E402
+from app.simulator.replay_service import ReplayError, ReplayFixtureService  # noqa: E402
 
 
 def sha256(path: Path) -> str:
@@ -70,7 +76,81 @@ class ReplayFixtureTests(unittest.TestCase):
         self.assertEqual(parsed["raw_scalar_count"], 0)
         self.assertIn("not found", parsed["error"])
 
+    def test_replay_service_validates_manifest_and_uses_production_parser(self):
+        service = ReplayFixtureService()
+
+        replayed = service.replay("phase_bootstrap_normal", strict_checksums=True)
+
+        self.assertEqual(replayed["metrics"]["aggregate"], self.manifest["expected_parser_outputs"]["aggregate"])
+        self.assertFalse(replayed["provenance"]["live_simulation"])
+        self.assertTrue(replayed["provenance"]["checksums_verified"])
+        self.assertEqual(
+            replayed["provenance"]["parser"],
+            "app.simulator.kpi_parser.KPIParser.parse_sca_file",
+        )
+
+    def test_replay_service_rejects_path_traversal_fixture_id(self):
+        service = ReplayFixtureService()
+
+        with self.assertRaises(ReplayError) as ctx:
+            service.validate_fixture("../phase_bootstrap_normal", strict_checksums=True)
+
+        self.assertEqual(ctx.exception.code, "invalid_fixture_id")
+
+    def test_replay_service_checksum_mismatch_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "replay"
+            copied = root / "phase_bootstrap_normal"
+            shutil.copytree(FIXTURE_ROOT, copied)
+            sca_path = copied / "phase_bootstrap_normal.sca"
+            with sca_path.open("ab") as handle:
+                handle.write(b"\n# checksum mismatch test\n")
+
+            service = ReplayFixtureService(fixture_root=root)
+            with self.assertRaises(ReplayError) as ctx:
+                service.validate_fixture("phase_bootstrap_normal", strict_checksums=True)
+
+        self.assertEqual(ctx.exception.code, "checksum_validation_failed")
+
+    def test_replay_service_missing_manifest_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "replay"
+            copied = root / "phase_bootstrap_normal"
+            shutil.copytree(FIXTURE_ROOT, copied)
+            (copied / "manifest.json").unlink()
+
+            service = ReplayFixtureService(fixture_root=root)
+            with self.assertRaises(ReplayError) as ctx:
+                service.validate_fixture("phase_bootstrap_normal", strict_checksums=True)
+
+        self.assertEqual(ctx.exception.code, "missing_manifest")
+
+    def test_replay_service_missing_sca_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "replay"
+            copied = root / "phase_bootstrap_normal"
+            shutil.copytree(FIXTURE_ROOT, copied)
+            (copied / "phase_bootstrap_normal.sca").unlink()
+
+            service = ReplayFixtureService(fixture_root=root)
+            with self.assertRaises(ReplayError) as ctx:
+                service.validate_fixture("phase_bootstrap_normal", strict_checksums=True)
+
+        self.assertEqual(ctx.exception.code, "missing_fixture_file")
+
+    def test_replay_service_malformed_manifest_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "replay"
+            copied = root / "phase_bootstrap_normal"
+            shutil.copytree(FIXTURE_ROOT, copied)
+            (copied / "manifest.json").write_text('{"fixture_id": "phase_bootstrap_normal"}', encoding="utf-8")
+
+            service = ReplayFixtureService(fixture_root=root)
+            with self.assertRaises(ReplayError) as ctx:
+                service.validate_fixture("phase_bootstrap_normal", strict_checksums=True)
+
+        self.assertEqual(ctx.exception.code, "malformed_manifest")
+
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -1,0 +1,68 @@
+{
+  "services": [
+    {
+      "name": "simulation",
+      "host_port": 7000,
+      "container_port": 7000,
+      "base_url_env": "SIMULATION_BASE_URL",
+      "native_url": "http://localhost:7000",
+      "docker_url": "http://simulation:7000",
+      "health_path": "/health",
+      "readiness_path": "/ready",
+      "capabilities_path": "/capabilities",
+      "supported_modes": ["replay", "live"],
+      "default_mode": "replay",
+      "api_paths": ["/simulate", "/start", "/stop", "/status", "/ready", "/capabilities"]
+    },
+    {
+      "name": "rag",
+      "host_port": 7001,
+      "container_port": 7001,
+      "base_url_env": "RAG_BASE_URL",
+      "native_url": "http://localhost:7001",
+      "docker_url": "http://rag:7001",
+      "health_path": "/health",
+      "api_paths": ["/v1/retrievaltool/json", "/v1/retrievaltool", "/synthesize"]
+    },
+    {
+      "name": "vllm",
+      "host_port": 8080,
+      "container_port": 8000,
+      "base_url_env": "VLLM_BASE_URL",
+      "native_url": "http://localhost:8080",
+      "docker_url": "http://vllm:8080",
+      "health_path": "/health",
+      "api_paths": ["/v1/chat/completions"]
+    },
+    {
+      "name": "gateway",
+      "host_port": 8888,
+      "container_port": 8888,
+      "base_url_env": "GATEWAY_BASE_URL",
+      "native_url": "http://localhost:8888",
+      "docker_url": "http://gateway:8888",
+      "health_path": "/v1/health",
+      "api_paths": ["/v1/chat", "/v1/agent/status", "/health"]
+    },
+    {
+      "name": "agent",
+      "host_port": 9090,
+      "container_port": 9090,
+      "base_url_env": "AGENT_BASE_URL",
+      "native_url": "http://localhost:9090",
+      "docker_url": "http://agent:9090",
+      "health_path": "/v1/health_check",
+      "api_paths": ["/v1/chat/completions", "/v1/tools"]
+    },
+    {
+      "name": "ui",
+      "host_port": 8501,
+      "container_port": 8501,
+      "base_url_env": "GATEWAY_BASE_URL",
+      "native_url": "http://localhost:8501",
+      "docker_url": "http://ui:8501",
+      "health_path": "/healthz",
+      "api_paths": []
+    }
+  ]
+}

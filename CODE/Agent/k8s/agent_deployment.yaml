@@ -152,16 +152,19 @@ data:
         query:
           type: str
           description: Specific technical question for the knowledge base.
-      return_output: retrieved_context
+      return_output: structured_retrieval_context
 
   tools.py: |
     import os, json, requests
-    SIM_SERVICE_URL = os.environ.get("SIM_SERVICE_URL", "http://localhost:8888")
-    RAG_SERVICE_URL = os.environ.get("RAG_SERVICE_URL", "http://localhost:8889")
-    def call_simulation(scenario, ue_count=20, cell_id=0):
+    def _base_url(primary, legacy, default):
+        value = os.environ.get(primary) or os.environ.get(legacy) or default
+        return value.strip().rstrip("/") or default
+    SIM_SERVICE_URL = _base_url("SIMULATION_BASE_URL", "SIM_SERVICE_URL", "http://simulation:7000")
+    RAG_SERVICE_URL = _base_url("RAG_BASE_URL", "RAG_SERVICE_URL", "http://rag:7001")
+    def call_simulation(scenario, ue_count=20, cell_id=0, slice_type="eMBB"):
         try:
             r = requests.post(f"{SIM_SERVICE_URL}/simulate",
-                json={"scenario": scenario, "ue_count": ue_count, "cell_id": cell_id},
+                json={"scenario": scenario, "ue_count": ue_count, "cell_id": cell_id, "slice_type": slice_type, "mode": "live"},
                 timeout=120)
             r.raise_for_status()
             return json.dumps(r.json())
@@ -169,9 +172,9 @@ data:
             return json.dumps({"error": str(e)})
     def call_rag(query):
         try:
-            r = requests.post(f"{RAG_SERVICE_URL}/v1/retrievaltool",
+            r = requests.post(f"{RAG_SERVICE_URL}/v1/retrievaltool/json",
                 json={"text": query}, timeout=30)
             r.raise_for_status()
-            return r.text
+            return json.dumps(r.json())
         except Exception as e:
             return json.dumps({"error": str(e)})

@@ -20,8 +20,13 @@ app = FastAPI(
 
 store = TelcoVectorStore()
 
+HEALTH_PATH = "/health"
+RETRIEVE_PATH = "/v1/retrievaltool/json"
+RETRIEVE_TEXT_COMPAT_PATH = "/v1/retrievaltool"
+SYNTHESIZE_PATH = "/synthesize"
 
-@app.get("/health")
+
+@app.get(HEALTH_PATH)
 async def health():
     return {
         "status": "healthy",
@@ -86,7 +91,7 @@ async def retrieve(req: RetrievalRequest):
     return _format_context(query, store.search(query, req.top_k))
 
 
-@app.post("/synthesize", response_model=SynthesisResponse)
+@app.post(SYNTHESIZE_PATH, response_model=SynthesisResponse)
 async def synthesize(req: SynthesisRequest):
     query = req.query.strip()
     if not query:
@@ -105,7 +110,7 @@ async def synthesize(req: SynthesisRequest):
     )
 
 
-@app.post("/v1/retrievaltool")
+@app.post(RETRIEVE_TEXT_COMPAT_PATH)
 async def opea_retrievaltool(req: RetrievalRequest):
     query = req.effective_query()
     if not query:
@@ -114,7 +119,7 @@ async def opea_retrievaltool(req: RetrievalRequest):
     return response.answer_context
 
 
-@app.post("/v1/retrievaltool/json", response_model=RetrievalResponse)
+@app.post(RETRIEVE_PATH, response_model=RetrievalResponse)
 async def opea_retrievaltool_json(req: RetrievalRequest):
     query = req.effective_query()
     if not query:

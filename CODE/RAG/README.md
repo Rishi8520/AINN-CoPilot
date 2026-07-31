@@ -231,7 +231,7 @@ Then start RAG with LLM synthesis enabled:
 ```bash
 cd CODE/RAG
 LLM_ENABLED=true \
-LLM_ENDPOINT_URL=http://localhost:8080 \
+VLLM_BASE_URL=http://localhost:8080 \
 LLM_MODEL=Qwen/Qwen2.5-0.5B-Instruct \
 RAG_DEVICE=cpu \
 ../.venv/bin/uvicorn app.rag_service:app --host 0.0.0.0 --port 7001
@@ -240,8 +240,9 @@ RAG_DEVICE=cpu \
 Environment variables:
 
 - `LLM_ENABLED`: defaults to `false`.
-- `LLM_ENDPOINT_URL`: defaults to empty. When enabled, RAG posts to
-  `{LLM_ENDPOINT_URL}/v1/chat/completions`.
+- `VLLM_BASE_URL`: defaults to empty. When enabled, RAG posts to
+  `{VLLM_BASE_URL}/v1/chat/completions`. `LLM_ENDPOINT_URL` remains a
+  compatibility alias.
 - `LLM_MODEL`: defaults to `Qwen/Qwen2.5-0.5B-Instruct`.
 - `LLM_TIMEOUT_SECONDS`: defaults to `30`.
 

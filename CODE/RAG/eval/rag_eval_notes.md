@@ -183,7 +183,7 @@ Optional vLLM-enabled synthesis check after starting vLLM on port `8080`:
 ```bash
 cd CODE/RAG
 LLM_ENABLED=true \
-LLM_ENDPOINT_URL=http://localhost:8080 \
+VLLM_BASE_URL=http://localhost:8080 \
 LLM_MODEL=Qwen/Qwen2.5-0.5B-Instruct \
 RAG_DEVICE=cpu \
 ../.venv/bin/uvicorn app.rag_service:app --host 0.0.0.0 --port 7001

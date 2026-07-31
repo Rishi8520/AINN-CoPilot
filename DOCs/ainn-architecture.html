@@ -630,10 +630,10 @@
       <rect x="34" y="470" width="140" height="90" rx="8" fill="#1a0d2e" stroke="#7e22ce" stroke-width="1.5" />
       <text x="104" y="494" text-anchor="middle" font-size="14">📚</text>
       <text x="104" y="510" text-anchor="middle" font-size="10" fill="#c084fc" font-family="monospace"
-        font-weight="700">rag-retrieval</text>
+        font-weight="700">rag</text>
       <text x="104" y="524" text-anchor="middle" font-size="8" fill="#8b949e"
         font-family="monospace">opea/retriever</text>
-      <text x="104" y="538" text-anchor="middle" font-size="8" fill="#facc15" font-family="monospace">:8889→7000</text>
+      <text x="104" y="538" text-anchor="middle" font-size="8" fill="#facc15" font-family="monospace">:7001</text>
       <text x="104" y="552" text-anchor="middle" font-size="8" fill="#8b949e"
         font-family="monospace">ainn-retrieval</text>
 
@@ -779,7 +779,7 @@
         <div class="step-num">3</div>
         <div class="step-text">
           If the LLM decides to <strong>retrieve knowledge</strong>, the agent calls <code>call_rag(query)</code> in
-          <code>tools.py</code>. This hits <code>rag-retrieval:7000</code> → TEI Embedding → TEI Reranker → Redis
+          <code>tools.py</code>. This hits <code>rag:7001/v1/retrievaltool/json</code> → TEI Embedding → TEI Reranker → Redis
           VectorDB. All inside Docker on machine 3.
         </div>
       </div>

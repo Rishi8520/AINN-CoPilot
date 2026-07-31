@@ -13,8 +13,11 @@ data:
 
   # Service URLs — inside K8s, services talk via ClusterIP DNS:
   # format is http://<service-name>.<namespace>.svc.cluster.local:<port>
-  SIM_SERVICE_URL: "http://simulation-service.ainn-copilot.svc.cluster.local:8888"
-  RAG_SERVICE_URL: "http://rag-retrieval-service.ainn-copilot.svc.cluster.local:7000"
+  SIMULATION_BASE_URL: "http://simulation-service.ainn-copilot.svc.cluster.local:7000"
+  RAG_BASE_URL: "http://rag-retrieval-service.ainn-copilot.svc.cluster.local:7001"
+  VLLM_BASE_URL: "http://vllm-service.ainn-copilot.svc.cluster.local:8080"
+  SIM_SERVICE_URL: "http://simulation-service.ainn-copilot.svc.cluster.local:7000"
+  RAG_SERVICE_URL: "http://rag-retrieval-service.ainn-copilot.svc.cluster.local:7001"
 
   # Redis
   REDIS_URL: "redis://redis-service.ainn-copilot.svc.cluster.local:6379"
@@ -24,4 +27,5 @@ data:
   LLM_MODEL: "meta-llama/Meta-Llama-3-8B-Instruct"
 
   # UI
+  AGENT_BASE_URL: "http://agent-service.ainn-copilot.svc.cluster.local:9090"
   AGENT_URL: "http://agent-service.ainn-copilot.svc.cluster.local:9090"

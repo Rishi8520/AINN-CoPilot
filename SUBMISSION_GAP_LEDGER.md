@@ -86,16 +86,16 @@ No root compose file was found.
 ### Agent/Gateway/UI state
 
 - Gateway exposes `/v1/health`, `/health`, `/v1/agent/status`, and `/v1/chat`.
-- UI defaults to `GATEWAY_URL=http://localhost:8080`.
-- Agent defaults `LLM_ENDPOINT_URL` to `http://localhost:8080`.
-- Tool defaults point Simulation to `http://localhost:8888` and RAG to `http://localhost:8889`.
+- Batch 3 changes UI native-host default to `GATEWAY_BASE_URL=http://localhost:8888`.
+- Batch 3 changes Agent/RAG vLLM configuration to prefer `VLLM_BASE_URL`; `LLM_ENDPOINT_URL` remains a compatibility alias.
+- Batch 3 changes Agent tool defaults to Simulation `http://localhost:7000` and RAG `http://localhost:7001`.
 
 ### Conflicting or stale endpoint configuration discovered
 
 - `CODE/Simulation/docker-compose.yml` runs Simulation on container port `7000`.
 - `CODE/RAG/docker-compose.yml` runs RAG health on `7000` and maps optional vLLM `8080:8000`.
 - Agent tool defaults use `8888` for Simulation and `8889` for RAG.
-- `CODE/Agent/tools/tools.py` still mentions Tailscale in comments and error hints.
+- Batch 3 removes the earlier Tailscale-oriented comments and error hints from `CODE/Agent/tools/tools.py`.
 
 ## D. Blocker categories
 
@@ -111,7 +111,7 @@ No root `docker-compose.yml` or `deploy.sh` exists. Subproject compose files are
 
 ### Port and network configuration
 
-Detected defaults disagree across components: Simulation compose uses port `7000`, RAG uses `7000`, Agent tools default to `8888` and `8889`, and UI defaults to Gateway `8080`.
+Batch 3 resolves the previously detected defaults disagreement. Canonical host ports are Simulation `7000`, RAG `7001`, vLLM/OpenAI-compatible API `8080`, Gateway `8888`, Agent `9090`, and UI `8501`. Subproject compose files and env examples are aligned to those values. The root one-click compose is still deferred to Batch 7.
 
 ### API-contract alignment
 
@@ -119,7 +119,7 @@ Gateway, Agent, RAG, and Simulation endpoints exist, but no end-to-end contract 
 
 ### Tailscale assumptions
 
-`CODE/Agent/tools/tools.py` contains Tailscale-oriented comments and error hints. Submission quickstart must not require Tailscale or teammate-machine services.
+Batch 3 removes active/default Tailscale-oriented Agent tool comments and error hints. Tailscale may remain in historical ledger notes as prior-development context, but active runtime defaults and examples must not require Tailscale or 100.x teammate-machine URLs.
 
 ### RAG fresh-clone/index readiness
 
@@ -139,11 +139,11 @@ RAG compose includes vLLM-related configuration. GPU vLLM should remain availabl
 
 ### Simulation quickstart versus real Simu5G mode
 
-The repository includes real Simu5G assets. Batch 2 removed bulk tracked runtime outputs and retained `phase_bootstrap_normal` as a recorded replay/parser fixture. A small quickstart/replay mode still needs to be separated from full simulation mode in a later batch.
+The repository includes real Simu5G assets. Batch 2 removed bulk tracked runtime outputs and retained `phase_bootstrap_normal` as a recorded replay/parser fixture. Batch 4 separates CPU-safe recorded replay mode from live Simu5G mode and labels replay results as recorded/replayed.
 
 ### Truthful Simulation health/readiness
 
-Health endpoints must not report success when required runtime dependencies fail. This needs targeted validation in later batches.
+Batch 4 separates Simulation liveness from readiness. `/health` reports FastAPI process liveness only. `/ready` reports replay readiness, live readiness, configured default-mode readiness, fixture validation status, and missing live prerequisites.
 
 ### Test coverage
 
@@ -185,14 +185,80 @@ No tagged commit/archive workflow is documented. The final uploaded EvalAI archi
 - Health endpoints must not report success when critical runtime dependencies have failed.
 - The final uploaded EvalAI archive is a static snapshot and should correspond to a tagged Git commit.
 
-## F. Ordered 15-batch remediation plan
+## F. Batch 3 evidence
+
+Batch 3 canonical ports:
+
+| Service | Host port | Canonical base URL env |
+| --- | ---: | --- |
+| Simulation | 7000 | `SIMULATION_BASE_URL` |
+| RAG | 7001 | `RAG_BASE_URL` |
+| vLLM/OpenAI-compatible API | 8080 | `VLLM_BASE_URL` |
+| Gateway | 8888 | `GATEWAY_BASE_URL` |
+| Agent | 9090 | `AGENT_BASE_URL` |
+| UI | 8501 | `UI_PORT` |
+
+Batch 3 API mismatches fixed:
+
+- Agent Simulation calls now send JSON to `POST /simulate` with `scenario`, `ue_count`, `cell_id`, `slice_type`, and `mode`.
+- Simulation `POST /simulate` now has a Pydantic JSON request model, validates malformed inputs, and reports requested/applied/unsupported parameters instead of silently discarding Agent metadata.
+- Agent RAG calls now use structured `POST /v1/retrievaltool/json`; the text endpoint remains as a compatibility route.
+- RAG/vLLM configuration now prefers `VLLM_BASE_URL` and still reads `LLM_ENDPOINT_URL` as a compatibility alias.
+- Gateway and UI defaults no longer collide with vLLM's `8080` host port.
+
+Batch 3 Tailscale status:
+
+- Active/default runtime configuration no longer requires Tailscale or 100.x teammate-machine URLs.
+- Historical ledger/documentation may still mention prior Tailscale use, but those references are not active defaults.
+
+Batch 3 validation evidence, updated by Batch 3A:
+
+- The actual lightweight pytest suites ran through WSL using the existing Linux project environment at `CODE/.venv/bin/python`.
+- Required Batch 3A pytest command covered Agent, Simulation API, Simulation replay fixture, RAG, and cross-service contract tests: `55 passed`, `0 failed`, `0 skipped`, `12 warnings`.
+- `compileall` over modified Python packages/tests/scripts passed using the same WSL project environment.
+- `contracts/services.json` parsed successfully and reports unique host ports: `7000`, `7001`, `8080`, `8501`, `8888`, `9090`.
+- `scripts/check_repo_hygiene.py` passed with `SUMMARY PASS=21 WARN=12 FAIL=0`.
+- `git diff --check` passed.
+- No packages were installed; WSL access to the existing project environment was used. No Docker, Simu5G, RAG ingestion, vLLM, or model download was run.
+
+## G. Batch 4 evidence
+
+Batch 4 Simulation mode behavior:
+
+- `POST /simulate` now dispatches explicitly to `replay` or `live`.
+- Default quickstart-oriented Simulation mode is CPU-safe `replay`.
+- Replay mode uses only the approved `phase_bootstrap_normal` fixture and the production `KPIParser.parse_sca_file`.
+- Replay validates the fixture manifest, file existence, file sizes, and SHA-256 checksums when strict validation is enabled.
+- Replay responses are labelled `recorded_replay`, set `live_simulation: false`, and include fixture provenance without absolute machine paths.
+- Unsupported replay scenarios such as fault, degraded, handover-failure, outage, and unknown scenarios do not receive the healthy fixture.
+- Requested `ue_count`, `cell_id`, `slice_type`, and `seed` are preserved under requested parameters but are not falsely listed as applied for replay.
+- Live mode checks `SIMULATION_LIVE_ENABLED`, `opp_run`, configured CWD, INET/Simu5G libraries, NED path entries, scenario assets, writable runtime directories, and runner availability without starting a simulation.
+- Live mode does not silently fall back to replay when disabled, unavailable, failed, or empty.
+- Stale live metrics cannot make a stopped or failed live runner report `completed`.
+- `/health`, `/ready`, and `/capabilities` distinguish liveness from replay/live readiness.
+
+Batch 4 limitations still open:
+
+- Live Simu5G execution is still not proven on this checkout.
+- Replay is not evidence of current live OMNeT++/Simu5G execution.
+- Replay is not evidence of fault/degraded behavior, live `.vec` polling, Docker startup, or dynamic application of arbitrary request parameters.
+- Root one-click deployment remains Batch 7.
+- Under-10-minute performance proof remains Batch 10.
+
+Batch 4 validation evidence:
+
+- Offline Simulation tests cover replay, live unavailable/failure behavior with mocks, health/readiness, query compatibility, JSON precedence, and fixture integrity.
+- No Docker container was started; only `docker compose -f CODE/Simulation/docker-compose.yml config` is intended for Compose validation.
+- No packages, models, OMNeT++, INET, Simu5G, or external assets were downloaded.
+
+## H. Ordered 15-batch remediation plan
 
 | Batch | Goal | Expected files/components | Acceptance gate | Risks |
 | --- | --- | --- | --- | --- |
 | 1. Repository hygiene and readiness ledger | Establish safe ignore rules, remove disposable tracked artifacts, and create this evidence ledger. | `.gitignore`, `CODE/.gitignore`, `SUBMISSION_GAP_LEDGER.md`, `scripts/check_repo_hygiene.py`. | Hygiene script passes with no Batch 1 FAIL findings. | Accidentally hiding required fixtures or overclaiming readiness. |
 | 2. Simulation artifact cleanup and traceable fixtures | Completed in Batch 2: preserved the `phase_bootstrap_normal` recorded fixture, documented provenance/checksums, added parser fixture tests, and removed tracked bulk generated/results artifacts. | `CODE/Simulation/fixtures/replay/phase_bootstrap_normal`, `CODE/Simulation/app/scenarios/results`, `CODE/Simulation/app/scenarios/generated`, `CODE/Simulation/tests/test_replay_fixtures.py`, `scripts/check_repo_hygiene.py`. | Runtime directories track only README.md and `.gitkeep`; fixture manifest and checksums validate; production KPI parser reads the recorded `.sca`. | Fixture proves parser compatibility with one recorded healthy bootstrap run only; live Simu5G startup and degraded/fault replay remain later-batch work. |
-| 3. Canonical ports, environment, and API contracts | Define one local port map and shared env contract. | Root env example, service config docs, compose env wiring. | UI, Gateway, Agent, RAG, and Simulation agree on URLs and ports. | Breaking existing teammate-specific defaults without compatibility notes. |
-| 4. Simulation dual-mode design | Separate quickstart replay/fixture mode from real Simu5G execution. | Simulation config, fixture loader, real runner path. | Quickstart works without compiling full Simu5G; real mode remains available. | Health/readiness could blur fixture mode and real mode. |
+| 3. Canonical ports, environment, and API contracts | Completed in Batch 3: established canonical single-node ports, env variables, Simulation/RAG/vLLM/Gateway/Agent/UI contracts, and active Tailscale removal. | `.env.example`, `CODE/.env.example`, `contracts/services.json`, `DOCs/SERVICE_CONTRACTS.md`, Agent/Gateway/UI/RAG/Simulation config and contract tests, `scripts/check_repo_hygiene.py`. | Offline contract tests and hygiene checks validate unique canonical ports, configurable URLs, JSON Simulation calls, structured RAG retrieval, vLLM path construction, and no active/default Tailscale dependency. | Root one-click deployment is still deferred to Batch 7; Simulation truthful replay/live dual-mode behavior remains Batch 4. |
+| 4. Simulation dual-mode design | Completed in Batch 4: separated quickstart replay/fixture mode from live Simu5G execution. | Simulation config, fixture loader, readiness probes, API dispatch, docs/tests. | CPU-safe replay works without Simu5G; live mode reports structured unavailable/failure unless explicitly enabled and ready. | Full live Simu5G execution is still unproven on this checkout. |
 | 5. RAG quickstart/prebuilt-index strategy | Avoid full ingestion in default demo while preserving rebuild path. | Small prebuilt/demo index or fixture corpus, ingestion docs. | Fresh clone can answer demo RAG queries quickly. | Shipping stale or oversized index artifacts. |
 | 6. CPU/no-GPU LLM and OPEA fallback strategy | Make default LLM path CPU-safe while keeping OPEA/GPU options. | Env profiles, fallback docs, optional vLLM profile. | Demo flow works on CPU-only single node. | Quality or latency regressions in CPU fallback. |
 | 7. Root one-click Compose/deploy script | Add root deployment entry point. | `docker-compose.yml`, `deploy.sh`, root `.env.example`. | One documented command starts the submission stack. | Port conflicts, slow image builds, missing health checks. |

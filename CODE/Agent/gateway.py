@@ -22,7 +22,13 @@ from agent import (
 from fastapi.middleware.cors import CORSMiddleware
 
 # ── Config from environment (set in docker-compose.yml) ──────────────────────
-AGENT_ENDPOINT = os.getenv("AGENT_ENDPOINT", "http://ainn-agent:9090")
+def _base_url_from_env(primary: str, legacy: str, default: str) -> str:
+    value = os.getenv(primary) or os.getenv(legacy) or default
+    value = value.strip().rstrip("/")
+    return value or default
+
+
+AGENT_ENDPOINT = _base_url_from_env("AGENT_BASE_URL", "AGENT_ENDPOINT", "http://agent:9090")
 GATEWAY_PORT   = int(os.getenv("GATEWAY_PORT", 8888))
 
 # ── Lifespan: probe all backends on container boot ────────────────────────────

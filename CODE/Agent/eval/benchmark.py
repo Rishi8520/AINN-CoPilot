@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env"))
 
 #AGENT_URL = os.environ.get("AGENT_URL", "http://localhost:9090")
-GATEWAY_URL = os.environ.get("GATEWAY_URL", "http://localhost:8080")
+GATEWAY_URL = (os.environ.get("GATEWAY_BASE_URL") or os.environ.get("GATEWAY_URL") or "http://localhost:8888").rstrip("/")
 # ─────────────────────────────────────────────────────────────────
 # Test cases — each maps to an expected tool usage pattern
 # judges will want to see all 3 patterns working

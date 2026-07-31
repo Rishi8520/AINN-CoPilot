@@ -23,14 +23,20 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("ainn.agent")
 
 # ── Endpoints (injected via docker-compose environment) ───────────────────────
-AGENT_ENDPOINT = os.getenv("AGENT_ENDPOINT", "http://ainn-agent:9090")
-SIM_SERVICE_URL = os.getenv("SIM_SERVICE_URL", "http://simulation:8888")
-RAG_SERVICE_URL = os.getenv("RAG_SERVICE_URL", "http://rag-retrieval:7000")
+def _base_url_from_env(primary: str, legacy: str, default: str) -> str:
+    value = os.getenv(primary) or os.getenv(legacy) or default
+    value = value.strip().rstrip("/")
+    return value or default
+
+
+AGENT_ENDPOINT = _base_url_from_env("AGENT_BASE_URL", "AGENT_ENDPOINT", "http://agent:9090")
+SIM_SERVICE_URL = _base_url_from_env("SIMULATION_BASE_URL", "SIM_SERVICE_URL", "http://simulation:7000")
+RAG_SERVICE_URL = _base_url_from_env("RAG_BASE_URL", "RAG_SERVICE_URL", "http://rag:7001")
 
 SIM_HEALTH_PATH = os.getenv("SIM_HEALTH_PATH", "/health")
 RAG_HEALTH_PATH = os.getenv("RAG_HEALTH_PATH", "/health")
 AGENT_HEALTH_PATH = os.getenv("AGENT_HEALTH_PATH", "/v1/health_check")
-LLM_ENDPOINT = os.getenv("LLM_ENDPOINT_URL", "http://localhost:8080")
+LLM_ENDPOINT = _base_url_from_env("VLLM_BASE_URL", "LLM_ENDPOINT_URL", "http://vllm:8080")
 HEALTH_PROBE_TIMEOUT_SECONDS = float(os.getenv("HEALTH_PROBE_TIMEOUT_SECONDS", "4.0"))
 STARTUP_PROBE_RETRIES = int(os.getenv("STARTUP_PROBE_RETRIES", "5"))
 STARTUP_PROBE_DELAY_SECONDS = float(os.getenv("STARTUP_PROBE_DELAY_SECONDS", "6.0"))

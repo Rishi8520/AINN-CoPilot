@@ -12,14 +12,14 @@
 
 run_simulation:
   description: >
-    Run a Simu5G 5G network simulation for a specific scenario and return
-    real network KPIs. Use this tool when the operator reports a performance
+    Request Simulation service KPIs for a specific scenario and return the
+    structured Simulation API response. Use this tool when the operator reports a performance
     issue (throughput drop, high latency, packet loss, excessive handovers,
     interference) and you need quantitative data to confirm a hypothesis.
     Also use this when asked to compare network behaviour across different
     load or interference conditions.
 
-    Available scenarios:
+    Available scenario labels:
       - normal_operation: stable baseline 5G NR operation
       - handover_failure: high mobility / weak overlap / delayed handover stress
       - energy_optimization: reduced transmit power and resource usage
@@ -79,4 +79,4 @@ rag_retrieve:
         Good: "What are the recommended remediation steps for co-channel
         interference in 5G NR according to O-RAN specifications?"
         Bad: "interference"
-  return_output: retrieved_context
+  return_output: structured_retrieval_context

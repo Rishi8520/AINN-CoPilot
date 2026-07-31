@@ -7,7 +7,9 @@ import requests
 import streamlit as st
 
 
-GATEWAY_URL = os.getenv("GATEWAY_URL", "http://localhost:8080").rstrip("/")
+GATEWAY_URL = (os.getenv("GATEWAY_BASE_URL") or os.getenv("GATEWAY_URL") or "http://localhost:8888").strip().rstrip("/")
+if not GATEWAY_URL:
+    GATEWAY_URL = "http://localhost:8888"
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("UI_REQUEST_TIMEOUT_SECONDS", "180"))
 
 

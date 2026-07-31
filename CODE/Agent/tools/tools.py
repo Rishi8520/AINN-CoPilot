@@ -1,28 +1,55 @@
-import os
 import json
-import requests
-from dotenv import load_dotenv
+import os
 
-# load_dotenv is only effective locally; inside Docker, env vars are
-# injected by docker-compose via the 'environment:' block in docker-compose.yml
+import requests
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv(*args, **kwargs):
+        return False
+
+
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 
-SIM_SERVICE_URL = os.environ.get("SIM_SERVICE_URL", "http://localhost:8888")
-RAG_SERVICE_URL = os.environ.get("RAG_SERVICE_URL", "http://localhost:8889")
+SIM_SERVICE_URL = ""
+RAG_SERVICE_URL = ""
+
+
+def _base_url_from_env(primary: str, legacy: str, default: str) -> str:
+    value = os.environ.get(primary) or os.environ.get(legacy) or default
+    value = value.strip().rstrip("/")
+    return value or default
+
+
+def _refresh_service_urls() -> None:
+    global SIM_SERVICE_URL, RAG_SERVICE_URL
+    SIM_SERVICE_URL = _base_url_from_env(
+        "SIMULATION_BASE_URL",
+        "SIM_SERVICE_URL",
+        "http://localhost:7000",
+    )
+    RAG_SERVICE_URL = _base_url_from_env(
+        "RAG_BASE_URL",
+        "RAG_SERVICE_URL",
+        "http://localhost:7001",
+    )
+
+
+_refresh_service_urls()
+
 SCENARIO_ALIASES = {
     "baseline": "normal_operation",
     "normal_operation": "normal_operation",
-
     "handover_stress": "handover_failure",
     "handover_failure": "handover_failure",
-
     "energy_saving": "energy_optimization",
     "energy_optimization": "energy_optimization",
-
     "high_load": "hotspot_traffic_burst",
     "interference_high": "hotspot_traffic_burst",
     "hotspot_traffic_burst": "hotspot_traffic_burst",
 }
+
 
 def call_simulation(
     scenario: str,
@@ -30,19 +57,15 @@ def call_simulation(
     cell_id: int = 0,
     slice_type: str = "eMBB",
 ) -> str:
-    """
-    Calls Member 1's Simu5G REST endpoint over Tailscale.
-
-    Accepts friendly scenario aliases used by the Agent and maps them to
-    Member 1's current Simulation scenario names.
-    """
+    """Call the canonical Simulation REST endpoint and return structured JSON text."""
+    _refresh_service_urls()
     mapped_scenario = SCENARIO_ALIASES.get(scenario, scenario)
-
     payload = {
         "scenario": mapped_scenario,
         "ue_count": ue_count,
         "cell_id": cell_id,
         "slice_type": slice_type,
+        "mode": "live",
     }
 
     try:
@@ -53,102 +76,128 @@ def call_simulation(
         )
         resp.raise_for_status()
         raw = resp.json()
-
-        data = raw.get("data", raw)
-        metrics = data.get("metrics", raw.get("metrics", {}))
+        if not isinstance(raw, dict):
+            raise ValueError("Simulation response JSON was not an object.")
 
         normalized = {
-            "status": raw.get("status", "success"),
+            "status": raw.get("status", "unknown"),
+            "run_id": raw.get("run_id"),
+            "mode": raw.get("mode"),
             "requested_scenario": scenario,
             "scenario": mapped_scenario,
             "ue_count": ue_count,
             "cell_id": cell_id,
             "slice_type": slice_type,
-            "metrics": metrics,
-            "topology": data.get("cluster_topology"),
-            "sector_prb_matrix": data.get("sector_prb_matrix"),
+            "requested_parameters": raw.get("requested_parameters", {}),
+            "applied_parameters": raw.get("applied_parameters", {}),
+            "unsupported_parameters": raw.get("unsupported_parameters", {}),
+            "metrics": raw.get("metrics", {}),
+            "result_reference": raw.get("result_reference", {}),
+            "error": raw.get("error"),
             "raw": raw,
         }
-
         return json.dumps(normalized)
 
     except requests.exceptions.ConnectionError:
-        return json.dumps({
-            "error": "Simulation service is unreachable.",
-            "hint": f"Check whether Member 1's Simulation service is reachable at {SIM_SERVICE_URL} over Tailscale.",
-        })
+        return json.dumps(
+            {
+                "error": "Simulation service is unreachable.",
+                "hint": f"Check whether the Simulation service is reachable at {SIM_SERVICE_URL}.",
+            }
+        )
     except requests.exceptions.Timeout:
-        return json.dumps({
-            "error": "Simulation timed out after 120 seconds.",
-            "hint": "Try a smaller ue_count or check whether the simulation backend is hanging.",
-        })
+        return json.dumps(
+            {
+                "error": "Simulation timed out after 120 seconds.",
+                "hint": "Try a smaller ue_count or check whether the simulation backend is hanging.",
+            }
+        )
     except requests.exceptions.HTTPError as e:
-        return json.dumps({
-            "error": f"Simulation service returned HTTP {e.response.status_code if e.response else 'unknown'}",
-            "detail": str(e),
-        })
+        status = e.response.status_code if e.response else "unknown"
+        detail = e.response.text if e.response is not None else str(e)
+        return json.dumps(
+            {
+                "error": f"Simulation service returned HTTP {status}",
+                "detail": detail,
+            }
+        )
+    except ValueError as e:
+        return json.dumps(
+            {
+                "error": "Simulation service returned malformed JSON.",
+                "detail": str(e),
+            }
+        )
     except Exception as e:
-        return json.dumps({
-            "error": "Unexpected simulation tool failure.",
-            "detail": str(e),
-        })
+        return json.dumps(
+            {
+                "error": "Unexpected simulation tool failure.",
+                "detail": str(e),
+            }
+        )
 
 
 def call_rag(query: str) -> str:
-    """
-    Calls Member 2's RAG retrieval endpoint.
-
-    Queries the 3GPP / O-RAN knowledge base and returns
-    reranked relevant text chunks with source references.
-    """
-    # OPEA retrievaltool expects a JSON string sent as raw data,
-    # NOT a dict via json= kwarg — must use data= with explicit header.
-    content = json.dumps({"text": query})
+    """Call the canonical structured RAG retrieval endpoint."""
+    _refresh_service_urls()
     try:
         resp = requests.post(
-            f"{RAG_SERVICE_URL}/v1/retrievaltool",
-            data=content,
-            headers={"Content-Type": "application/json"},
-            timeout=30
+            f"{RAG_SERVICE_URL}/v1/retrievaltool/json",
+            json={"text": query},
+            timeout=30,
         )
         resp.raise_for_status()
-        return resp.text
+        raw = resp.json()
+        if not isinstance(raw, dict):
+            raise ValueError("RAG response JSON was not an object.")
+        return json.dumps(raw)
 
     except requests.exceptions.ConnectionError:
-        return json.dumps({
-            "error": "RAG service is unreachable.",
-            "hint": f"Is Member 2's retrieval container running at {RAG_SERVICE_URL}?"
-        })
+        return json.dumps(
+            {
+                "error": "RAG service is unreachable.",
+                "hint": f"Is the RAG retrieval service running at {RAG_SERVICE_URL}?",
+            }
+        )
     except requests.exceptions.Timeout:
-        return json.dumps({
-            "error": "RAG service timed out after 30 seconds."
-        })
+        return json.dumps({"error": "RAG service timed out after 30 seconds."})
     except requests.exceptions.HTTPError as e:
-        return json.dumps({
-            "error": f"RAG service returned HTTP {e.response.status_code if e.response else 'unknown'}",
-            "detail": str(e)
-        })
+        status = e.response.status_code if e.response else "unknown"
+        detail = e.response.text if e.response is not None else str(e)
+        return json.dumps(
+            {
+                "error": f"RAG service returned HTTP {status}",
+                "detail": detail,
+            }
+        )
+    except ValueError as e:
+        return json.dumps(
+            {
+                "error": "RAG service returned malformed JSON.",
+                "detail": str(e),
+            }
+        )
 
-
-# ── Stub mode for local testing without real services ─────────────
-# When both services are down, you can test the agent's reasoning
-# by temporarily replacing the functions above with these stubs.
 
 def call_simulation_stub(scenario: str, ue_count: int = 20, cell_id: int = 0) -> str:
-    """Hardcoded stub — use when Member 1's service is not yet ready."""
-    return json.dumps({
-        "throughput_mbps": 45.2,
-        "latency_ms": 12.8,
-        "sinr_db": 8.4,
-        "packet_loss_pct": 1.2,
-        "handover_count": 5,
-        "scenario": scenario,
-        "simulation_time_s": 2.1
-    })
+    """Local-only deterministic stub for manual tool development."""
+    return json.dumps(
+        {
+            "throughput_mbps": 45.2,
+            "latency_ms": 12.8,
+            "sinr_db": 8.4,
+            "packet_loss_pct": 1.2,
+            "handover_count": 5,
+            "scenario": scenario,
+            "ue_count": ue_count,
+            "cell_id": cell_id,
+            "simulation_time_s": 2.1,
+        }
+    )
 
 
 def call_rag_stub(query: str) -> str:
-    """Hardcoded stub — use when Member 2's service is not yet ready."""
+    """Local-only deterministic stub for manual tool development."""
     return (
         "[O-RAN.WG2.Non-RT-RIC-ARCH-R003, Section 5.2] "
         "Throughput degradation in 5G NR is commonly caused by co-channel "

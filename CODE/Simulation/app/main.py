@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router, runner
+from app.simulator.mode_config import get_mode_settings
 
 app = FastAPI(
     title="TelcoMind Digital Twin",
@@ -21,7 +22,8 @@ app.include_router(router)
 
 @app.on_event("startup")
 def on_startup():
-    runner.start()
+    if get_mode_settings().live_enabled:
+        runner.start()
 
 
 @app.on_event("shutdown")

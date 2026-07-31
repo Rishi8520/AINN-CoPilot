@@ -10,6 +10,7 @@ import os
 import stat
 import subprocess
 import sys
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -34,6 +35,27 @@ REQUIRED_ROOT_FILES = [
     "TECHNICAL_REPORT.pdf",
     "docker-compose.yml",
     "deploy.sh",
+]
+SERVICE_CONTRACT = Path("contracts/services.json")
+SIMULATION_DEFAULT_EXAMPLES = [
+    Path(".env.example"),
+    Path("CODE/.env.example"),
+    Path("CODE/Simulation/docker-compose.yml"),
+]
+ACTIVE_NETWORK_CONFIG_FILES = [
+    Path(".env.example"),
+    Path("CODE/.env.example"),
+    Path("CODE/Agent/tools/tools.py"),
+    Path("CODE/Agent/agent.py"),
+    Path("CODE/Agent/gateway.py"),
+    Path("CODE/Agent/ui/app.py"),
+    Path("CODE/Agent/docker-compose.yml"),
+    Path("CODE/RAG/docker-compose.yml"),
+    Path("CODE/Simulation/docker-compose.yml"),
+]
+FORBIDDEN_ACTIVE_NETWORK_PATTERNS = [
+    re.compile(r"Tailscale", re.IGNORECASE),
+    re.compile(r"https?://100\.\d{1,3}\.\d{1,3}\.\d{1,3}"),
 ]
 TRACKED_CACHE_PATTERNS = [
     "*/__pycache__/*",
@@ -449,6 +471,81 @@ def main() -> int:
         else:
             emit("WARN", f"future submission deliverable missing at root: {filename}", counts)
 
+    contract_path = ROOT / SERVICE_CONTRACT
+    if contract_path.exists():
+        try:
+            services = json.loads(contract_path.read_text(encoding="utf-8")).get("services", [])
+        except (OSError, json.JSONDecodeError) as exc:
+            emit("FAIL", f"service contract cannot be loaded: {exc}", counts)
+            services = []
+        ports = [service.get("host_port") for service in services]
+        if ports and len(ports) == len(set(ports)):
+            emit("PASS", "canonical service host ports are unique", counts)
+        elif ports:
+            emit("FAIL", "canonical service host ports contain duplicates", counts)
+        expected_ports = {
+            "simulation": 7000,
+            "rag": 7001,
+            "vllm": 8080,
+            "gateway": 8888,
+            "agent": 9090,
+            "ui": 8501,
+        }
+        actual_ports = {service.get("name"): service.get("host_port") for service in services}
+        if actual_ports == expected_ports:
+            emit("PASS", "canonical service host ports match Batch 3 contract", counts)
+        else:
+            emit("FAIL", f"canonical service ports differ from Batch 3 contract: {actual_ports}", counts)
+        simulation = next((service for service in services if service.get("name") == "simulation"), {})
+        if simulation.get("readiness_path") == "/ready" and simulation.get("supported_modes") == ["replay", "live"]:
+            emit("PASS", "Simulation service contract documents readiness and replay/live modes", counts)
+        else:
+            emit("FAIL", "Simulation service contract is missing readiness path or replay/live mode metadata", counts)
+    else:
+        emit("FAIL", f"service contract is absent: {SERVICE_CONTRACT.as_posix()}", counts)
+
+    default_mode_findings = []
+    fallback_findings = []
+    for rel_path in SIMULATION_DEFAULT_EXAMPLES:
+        path = ROOT / rel_path
+        if not path.exists():
+            default_mode_findings.append(f"{rel_path.as_posix()}: missing")
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if "SIMULATION_DEFAULT_MODE=replay" not in text and "SIMULATION_DEFAULT_MODE:-replay" not in text:
+            default_mode_findings.append(f"{rel_path.as_posix()}: default mode is not documented as replay")
+        if "LIVE_TO_REPLAY" in text.upper() or "FALLBACK_TO_REPLAY" in text.upper():
+            fallback_findings.append(f"{rel_path.as_posix()}: contains silent fallback-looking flag")
+    if default_mode_findings:
+        emit("FAIL", f"Simulation submission examples do not consistently default to replay: {len(default_mode_findings)}", counts)
+        print_limited("Simulation default findings", default_mode_findings)
+    else:
+        emit("PASS", "Simulation submission examples consistently default to CPU-safe replay mode", counts)
+    if fallback_findings:
+        emit("FAIL", f"Simulation configuration contains silent live-to-replay fallback-looking flags: {len(fallback_findings)}", counts)
+        print_limited("Simulation fallback findings", fallback_findings)
+    else:
+        emit("PASS", "Simulation configuration exposes no silent live-to-replay fallback flag", counts)
+
+    active_network_findings = []
+    for rel_path in ACTIVE_NETWORK_CONFIG_FILES:
+        path = ROOT / rel_path
+        if not path.exists():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            active_network_findings.append(f"{rel_path.as_posix()}: unreadable: {exc}")
+            continue
+        for pattern in FORBIDDEN_ACTIVE_NETWORK_PATTERNS:
+            if pattern.search(text):
+                active_network_findings.append(f"{rel_path.as_posix()}: {pattern.pattern}")
+    if active_network_findings:
+        emit("FAIL", f"active/default network configuration still contains Tailscale or 100.x URLs: {len(active_network_findings)}", counts)
+        print_limited("active network findings", active_network_findings)
+    else:
+        emit("PASS", "active/default network configuration has no Tailscale or 100.x URL dependency", counts)
+
     disposable = [
         Path("CODE/Simulation/.cmdenv-log"),
         Path("CODE/Simulation/simu5g.tar.gz"),
@@ -468,7 +565,7 @@ def main() -> int:
         emit("PASS", "approved empty disposable tracked artifacts are absent from working tree", counts)
 
     emit("WARN", "full live Simu5G execution has not been validated by the hygiene script", counts)
-    emit("WARN", "quickstart/replay mode implementation remains a later-batch validation item", counts)
+    emit("PASS", "quickstart-oriented Simulation replay mode has explicit fixture validation checks", counts)
 
     if not (ROOT / "docker-compose.yml").exists() and not (ROOT / "deploy.sh").exists():
         emit("WARN", "missing root one-click quickstart entry point", counts)
