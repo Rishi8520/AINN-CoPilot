@@ -75,3 +75,4 @@ temp/
 benchmark_outputs/
 benchmark-results/
 local_benchmarks/
+test-results/

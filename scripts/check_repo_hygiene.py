@@ -79,8 +79,17 @@ FORBIDDEN_ACTIVE_NETWORK_PATTERNS = [
 ROOT_COMPOSE = Path("docker-compose.yml")
 ROOT_DEPLOY_SH = Path("deploy.sh")
 ROOT_DEPLOY_PS1 = Path("deploy.ps1")
+ROOT_TEST_SH = Path("test.sh")
+ROOT_TEST_PS1 = Path("test.ps1")
 ROOT_DOCKERIGNORE = Path(".dockerignore")
 ROOT_SMOKE_TEST = Path("scripts/smoke_test.py")
+ROOT_TEST_RUNNER = Path("scripts/run_test_matrix.py")
+ROOT_TEST_MATRIX = Path("tests/test_matrix.json")
+ROOT_TEST_DOC = Path("DOCs/TESTING.md")
+ROOT_DOCKERFILE_TEST = Path("Dockerfile.test")
+ROOT_COMPOSE_TEST = Path("docker-compose.test.yml")
+ROOT_REQUIREMENTS_TEST = Path("requirements.test.txt")
+ROOT_TEST_RESULTS = Path("test-results")
 CREDENTIAL_BEARING_URL = re.compile(r"https?://[^/\s:@]+:[^@\s/]+@")
 TRACKED_CACHE_PATTERNS = [
     "*/__pycache__/*",
@@ -741,18 +750,82 @@ def main() -> int:
     for rel_path in [ROOT_DEPLOY_SH, ROOT_DEPLOY_PS1, ROOT_DOCKERIGNORE, ROOT_SMOKE_TEST]:
         if not (ROOT / rel_path).exists():
             root_deployment_findings.append(f"{rel_path.as_posix()} is missing")
+    for rel_path in [
+        ROOT_TEST_SH,
+        ROOT_TEST_PS1,
+        ROOT_TEST_RUNNER,
+        ROOT_TEST_MATRIX,
+        ROOT_TEST_DOC,
+        ROOT_DOCKERFILE_TEST,
+        ROOT_COMPOSE_TEST,
+        ROOT_REQUIREMENTS_TEST,
+    ]:
+        if not (ROOT / rel_path).exists():
+            root_deployment_findings.append(f"Batch 8 test artifact is missing: {rel_path.as_posix()}")
     deploy_sh_path = ROOT / ROOT_DEPLOY_SH
     if deploy_sh_path.exists() and b"\r\n" in deploy_sh_path.read_bytes():
         root_deployment_findings.append("deploy.sh has CRLF line endings")
+    test_sh_path = ROOT / ROOT_TEST_SH
+    if test_sh_path.exists() and b"\r\n" in test_sh_path.read_bytes():
+        root_deployment_findings.append("test.sh has CRLF line endings")
     dockerignore_path = ROOT / ROOT_DOCKERIGNORE
     if dockerignore_path.exists():
         dockerignore_text = dockerignore_path.read_text(encoding="utf-8", errors="replace")
-        for required_pattern in ["CODE/RAG/storage", "**/model_cache", "CODE/Simulation/app/scenarios/results/*"]:
+        for required_pattern in ["CODE/RAG/storage", "**/model_cache", "CODE/Simulation/app/scenarios/results/*", "test-results"]:
             if required_pattern not in dockerignore_text:
                 root_deployment_findings.append(f".dockerignore missing exclusion: {required_pattern}")
         for forbidden_pattern in ["CODE/RAG/quickstart", "CODE/Simulation/fixtures"]:
             if forbidden_pattern in dockerignore_text:
                 root_deployment_findings.append(f".dockerignore excludes required quickstart input: {forbidden_pattern}")
+    gitignore_path = ROOT / ".gitignore"
+    if gitignore_path.exists() and "test-results/" not in gitignore_path.read_text(encoding="utf-8", errors="replace"):
+        root_deployment_findings.append(".gitignore does not ignore test-results/")
+    if ROOT_TEST_MATRIX.exists():
+        try:
+            test_matrix = json.loads((ROOT / ROOT_TEST_MATRIX).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            root_deployment_findings.append(f"test matrix cannot be parsed: {exc}")
+        else:
+            suites = test_matrix.get("suites", [])
+            if not suites:
+                root_deployment_findings.append("test matrix has no suites")
+            for suite in suites:
+                for field in ["working_directory", "junit_output"]:
+                    value = str(suite.get(field, ""))
+                    if Path(value).is_absolute() or re.search(r"^[A-Za-z]:[\\/]", value):
+                        root_deployment_findings.append(f"test matrix uses absolute {field}: {suite.get('id')}")
+                env_text = json.dumps(suite.get("environment", {}), sort_keys=True)
+                if CREDENTIAL_BEARING_URL.search(env_text):
+                    root_deployment_findings.append(f"test matrix has credential-bearing URL: {suite.get('id')}")
+                if re.search(r"https?://100\.\d{1,3}\.\d{1,3}\.\d{1,3}|Tailscale", env_text, re.IGNORECASE):
+                    root_deployment_findings.append(f"test matrix has external production/overlay URL: {suite.get('id')}")
+    if ROOT_DOCKERFILE_TEST.exists():
+        dockerfile_test = (ROOT / ROOT_DOCKERFILE_TEST).read_text(encoding="utf-8", errors="replace")
+        if re.search(r"FROM\s+\S+:latest\b", dockerfile_test):
+            root_deployment_findings.append("Dockerfile.test uses a latest base image")
+        for forbidden in ["nvidia", "cuda", "vllm", "huggingface-cli", "sentence-transformers"]:
+            if forbidden in dockerfile_test.lower():
+                root_deployment_findings.append(f"Dockerfile.test appears to require model/GPU dependency: {forbidden}")
+    if ROOT_COMPOSE_TEST.exists():
+        try:
+            compose_test = yaml.safe_load((ROOT / ROOT_COMPOSE_TEST).read_text(encoding="utf-8")) if yaml else None
+        except Exception as exc:
+            root_deployment_findings.append(f"docker-compose.test.yml cannot be parsed: {exc}")
+            compose_test = None
+        if compose_test:
+            test_services = compose_test.get("services", {})
+            if "test-runner" not in test_services:
+                root_deployment_findings.append("docker-compose.test.yml lacks test-runner service")
+            elif test_services["test-runner"].get("profiles") != ["test"]:
+                root_deployment_findings.append("test-runner service is not profile-gated")
+            if root_compose and "test-runner" in root_compose.get("services", {}):
+                root_deployment_findings.append("production compose includes test-runner service")
+    tracked_test_outputs = [
+        path for path in tracked
+        if path.startswith("test-results/") or path.endswith(".pytest.xml") or path.endswith(".junit.xml")
+    ]
+    if tracked_test_outputs:
+        root_deployment_findings.append(f"test result/JUnit artifacts are tracked: {len(tracked_test_outputs)}")
 
     if root_deployment_findings:
         emit("FAIL", f"root quickstart deployment hygiene failures: {len(root_deployment_findings)}", counts)

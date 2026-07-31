@@ -2,6 +2,8 @@
 
 TelcoMind Batch 7 adds a root, single-node Docker Compose quickstart. The default stack is CPU-safe and starts five required services: Simulation replay, RAG quickstart, Agent, Gateway, and Streamlit UI.
 
+Batch 8 adds root test commands (`test.ps1` and `test.sh`) for offline validation. These commands do not start the production stack by default. Use `-WithSmoke` or `--with-smoke` only after the stack is already running and healthy.
+
 ## Prerequisites
 
 - Docker Desktop or Docker Engine with Docker Compose v2.

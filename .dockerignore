@@ -48,6 +48,8 @@ submitted
 submitted/**
 submissions
 submissions/**
+test-results
+test-results/**
 *.zip
 *.tar
 *.tar.gz

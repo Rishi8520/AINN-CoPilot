@@ -1,5 +1,13 @@
 # Submission Gap Ledger
 
+## Batch 8 Update - Root Test Matrix
+
+- Added `tests/test_matrix.json`, `scripts/run_test_matrix.py`, `test.ps1`, and `test.sh` for isolated offline/static test execution with JUnit, logs, and JSON/text summaries under ignored `test-results/`.
+- Added a Docker fallback test image (`Dockerfile.test`, `requirements.test.txt`, `docker-compose.test.yml`) that runs offline suites without GPU/model downloads and with execution-time networking disabled.
+- Added Agent/Gateway/UI, matrix isolation, artifact integrity, static configuration, and hygiene-backed tests.
+- Documented the package collision between `CODE/RAG/app` and `CODE/Simulation/app`; the matrix runs collision-prone suites in separate subprocesses.
+- Offline tests still do not prove live Simu5G, full semantic RAG ingestion, real vLLM, external APIs, GPU behavior, or clean-machine timing.
+
 ## Batch 7 Update - Root Quickstart Deployment
 
 - Added root `docker-compose.yml` for the CPU-safe single-node quickstart stack.

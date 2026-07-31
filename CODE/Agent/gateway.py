@@ -152,9 +152,16 @@ async def _blocking_call(payload: dict) -> dict:
                 json=payload,
             )
             r.raise_for_status()
-            return r.json()
+            body = r.json()
+            if not isinstance(body, dict):
+                raise ValueError("Agent returned non-object JSON")
+            return body
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=e.response.status_code, detail=str(e))
+    except httpx.TimeoutException as e:
+        raise HTTPException(status_code=504, detail=f"Agent request timed out: {e}") from e
+    except (httpx.RequestError, ValueError) as e:
+        raise HTTPException(status_code=502, detail=f"Agent response error: {e}") from e
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":

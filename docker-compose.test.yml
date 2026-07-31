@@ -1,0 +1,27 @@
+services:
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    image: telcomind/test-runner:batch8
+    profiles:
+      - test
+    network_mode: none
+    working_dir: /repo
+    volumes:
+      - .:/repo:ro
+      - ./test-results:/test-results
+    environment:
+      TEST_RESULTS_DIR: /test-results
+      PYTHONDONTWRITEBYTECODE: "1"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    command:
+      [
+        "python",
+        "scripts/run_test_matrix.py",
+        "--execution-mode",
+        "local",
+        "--output-dir",
+        "/test-results"
+      ]
