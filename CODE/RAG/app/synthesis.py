@@ -43,9 +43,16 @@ def synthesize_response(
     if not llm_answer:
         assumptions = list(deterministic_response.assumptions)
         assumptions.append("LLM synthesis was unavailable, so deterministic fallback synthesis was used.")
-        return _copy_response(deterministic_response, assumptions=assumptions)
+        warnings = list(deterministic_response.warnings)
+        warnings.append("vLLM synthesis was configured but unavailable; deterministic synthesis was used.")
+        return _copy_response(
+            deterministic_response,
+            assumptions=assumptions,
+            warnings=warnings,
+            fallback_used=True,
+        )
 
-    return _copy_response(deterministic_response, answer=llm_answer)
+    return _copy_response(deterministic_response, answer=llm_answer, synthesis_backend="vllm", llm_used=True)
 
 
 def _copy_response(response: SynthesisResponse, **updates: Any) -> SynthesisResponse:
@@ -65,7 +72,7 @@ def _deterministic_synthesis(
     selected_sources = ranked_sources[:3]
 
     citations = [_citation_from_source(source) for source in selected_sources]
-    confidence = _confidence_from_sources(ranked_sources)
+    confidence = _evidence_strength_from_sources(ranked_sources)
     assumptions = _assumptions_from_inputs(selected_sources, simulation_kpis, intent_type)
     retrieval_context_count = len(ranked_sources)
 
@@ -218,14 +225,12 @@ def _citation_from_source(source: SourceChunk) -> SynthesisCitation:
     )
 
 
-def _confidence_from_sources(sources: list[SourceChunk]) -> str:
+def _evidence_strength_from_sources(sources: list[SourceChunk]) -> str:
     if not sources:
         return "low"
-
-    top_score = sources[0].score
-    if top_score >= 0.75:
+    if len(sources) >= 3:
         return "high"
-    if top_score >= 0.25:
+    if len(sources) >= 2:
         return "medium"
     return "low"
 
@@ -237,7 +242,7 @@ def _assumptions_from_inputs(
 ) -> list[str]:
     assumptions = [
         "Retrieved chunks are treated as the authoritative evidence for this response.",
-        "Citation scores are interpreted as retrieval relevance, not proof of root cause.",
+        "Citation scores are raw retrieval ranking scores, not confidence, probability, or proof of root cause.",
     ]
     if simulation_kpis:
         assumptions.append("Simulation KPIs are caller-provided and have not been independently validated.")

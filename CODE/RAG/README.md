@@ -1,15 +1,17 @@
 # TelcoMind Member 2: RAG & Knowledge
 
 This service provides the TelcoMind Retrieval-Augmented Generation (RAG)
-knowledge layer. It indexes local runbooks, scenario markdown, and official
-specification PDFs, then exposes retrieval and synthesis endpoints for the
-Agent, UI, and teammate demos.
+knowledge layer. It exposes retrieval and synthesis endpoints for the Agent,
+UI, and teammate demos with two explicit profiles: default offline
+`quickstart` and advanced semantic `full`.
 
 Current status:
 
 - Runs locally on port `7001`.
-- `/health` reports service readiness.
-- `/ingest` indexes runbooks, scenarios, and PDFs under `knowledge_base/specs/`.
+- `/health` reports process liveness only.
+- `/ready` reports configured-profile readiness.
+- `/capabilities` reports profile/backend support.
+- `/ingest` explicitly indexes runbooks, scenarios, and PDFs only in `RAG_PROFILE=full`.
 - `/v1/retrievaltool` returns Agent-compatible plain text.
 - `/v1/retrievaltool/json` returns citation-ready JSON.
 - `/synthesize` returns structured synthesis with answer, confidence,
@@ -18,30 +20,62 @@ Current status:
 
 ## Local Startup
 
-Use CPU mode for the current local setup:
+Use the CPU-safe offline quickstart profile for the current local setup:
 
 ```bash
 cd CODE/RAG
-RAG_DEVICE=cpu ../.venv/bin/uvicorn app.rag_service:app --host 0.0.0.0 --port 7001
+RAG_PROFILE=quickstart RAG_DEVICE=cpu ../.venv/bin/uvicorn app.rag_service:app --host 0.0.0.0 --port 7001
 ```
 
-`RAG_DEVICE=cpu` is currently recommended because the RTX 5070 Ti requires
-`sm_120` support, and the current PyTorch setup is not compatible with that GPU
-target yet. GPU optimization can be added later after a compatible PyTorch/vLLM
-stack is available.
+Quickstart does not initialize Chroma, BGE embeddings, the reranker, CUDA,
+vLLM, model downloads, or full PDF ingestion. It uses
+`quickstart/corpus.jsonl` and deterministic lexical BM25-style ranking.
 
 ## Endpoints
 
 - `GET /health`
+- `GET /ready`
+- `GET /capabilities`
 - `POST /ingest`
 - `POST /retrieve`
 - `POST /v1/retrievaltool`
 - `POST /v1/retrievaltool/json`
 - `POST /synthesize`
 
+## Profiles
+
+```env
+RAG_PROFILE=quickstart
+RAG_QUICKSTART_CORPUS_PATH=quickstart/corpus.jsonl
+RAG_QUICKSTART_TOP_K=5
+RAG_AUTO_INGEST=false
+RAG_STRICT_PROVENANCE=true
+```
+
+`quickstart` is the default. It is offline and CPU-safe once Python
+dependencies are available. Retrieval responses identify
+`rag_profile=quickstart`, `retrieval_backend=lexical_bm25`, `corpus_id`, result
+count, warnings, and `fallback_used=false`. Lexical scores are raw BM25 ranking
+scores, not confidence, probability, calibrated scores, semantic similarity, or
+retrieval quality proof.
+
+`full` preserves the existing Chroma/BGE/reranker path:
+
+```env
+RAG_PROFILE=full
+RAG_FULL_INDEX_PATH=storage/chroma
+RAG_AUTO_INGEST=false
+```
+
+Full mode requires an existing non-empty Chroma collection or an explicit
+separately invoked ingestion step. If full requirements are missing, `/ready`
+and retrieval report unavailable; the service does not silently substitute
+quickstart results.
+
 ## Embedding And Reranker Backends
 
-By default, RAG uses local `sentence-transformers` models in-process:
+In `RAG_PROFILE=full`, RAG can use local `sentence-transformers` models
+in-process:
 
 ```env
 EMBEDDING_BACKEND=local
@@ -50,8 +84,8 @@ RERANKER_BACKEND=local
 RERANKER_MODEL=BAAI/bge-reranker-base
 ```
 
-This is the source-of-truth path for the current local demo. It requires no
-external embedding or reranker microservices.
+This is the source-of-truth path for the advanced semantic profile. It is not
+loaded by the default quickstart profile.
 
 RAG can also be pointed at OPEA-style external embedding and reranker services
 without changing the retrieval API:
@@ -69,7 +103,8 @@ RERANKER_TIMEOUT_SECONDS=30
 ```
 
 If an external endpoint is not configured, times out, fails, returns invalid
-JSON, or returns an invalid shape, RAG falls back to the local model path. Set
+JSON, or returns an invalid shape in full mode, RAG falls back to the local
+full-profile model path. It does not fall back to the quickstart backend. Set
 `RERANKER_BACKEND=disabled` to skip reranking and return vector-search scores
 only.
 
@@ -146,16 +181,18 @@ storage.
 
 ## Curl Examples
 
-Health:
+Health and readiness:
 
 ```bash
 curl http://localhost:7001/health
+curl http://localhost:7001/ready
+curl http://localhost:7001/capabilities
 ```
 
-Ingest knowledge base:
+Explicit full-profile ingestion:
 
 ```bash
-curl -X POST http://localhost:7001/ingest
+RAG_PROFILE=full curl -X POST http://localhost:7001/ingest
 ```
 
 Agent-compatible plain-text retrieval:
@@ -270,6 +307,30 @@ POST /v1/retrievaltool
 This endpoint returns plain text that is compatible with the existing Agent
 tooling. UI and synthesis workflows can use `/v1/retrievaltool/json` for
 citation-ready retrieval or `/synthesize` for structured answers.
+
+## Quickstart Corpus
+
+Quickstart files live in:
+
+```text
+CODE/RAG/quickstart/
+  README.md
+  corpus.jsonl
+  manifest.json
+  demo_queries.json
+```
+
+Rebuild or verify the committed corpus offline:
+
+```bash
+python scripts/build_quickstart_corpus.py
+python scripts/build_quickstart_corpus.py --verify
+python scripts/evaluate_quickstart.py
+```
+
+The corpus is generated only from committed `knowledge_base` sources and
+records source-relative paths, source hashes, chunk hashes, extraction methods,
+and PDF pages where used.
 
 ## Knowledge Base Layout
 

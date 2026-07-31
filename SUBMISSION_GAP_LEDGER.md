@@ -123,7 +123,7 @@ Batch 3 removes active/default Tailscale-oriented Agent tool comments and error 
 
 ### RAG fresh-clone/index readiness
 
-Knowledge-base files exist, but local Chroma runtime storage is untracked. Fresh-clone RAG readiness is not proven.
+Knowledge-base files exist, and Batch 5 adds a committed quickstart corpus under `CODE/RAG/quickstart` for offline lexical retrieval. Local Chroma runtime storage remains untracked. Full semantic RAG fresh-clone readiness is not proven without explicit full ingestion or a supplied existing index.
 
 ### Full RAG-ingestion duration
 
@@ -251,6 +251,31 @@ Batch 4 validation evidence:
 - No Docker container was started; only `docker compose -f CODE/Simulation/docker-compose.yml config` is intended for Compose validation.
 - No packages, models, OMNeT++, INET, Simu5G, or external assets were downloaded.
 
+## G2. Batch 5 evidence
+
+Batch 5 RAG quickstart profile:
+
+- `RAG_PROFILE` now accepts exactly `quickstart` and `full`; empty defaults to `quickstart` and invalid values fail clearly.
+- Quickstart is the default submission-oriented profile and uses deterministic lexical BM25-style ranking over `CODE/RAG/quickstart/corpus.jsonl`.
+- Quickstart does not initialize Chroma, sentence-transformers, BGE embedding models, rerankers, CUDA, vLLM, external embedding/reranking services, model downloads, full PDF ingestion, or runtime index writes during startup.
+- The committed quickstart corpus contains 10 chunks and is 13,623 bytes. It is derived from existing runbooks, scenario mapping, and selected PDF pages already present under `CODE/RAG/knowledge_base`.
+- `CODE/RAG/quickstart/manifest.json` records source-relative paths, source SHA-256 hashes, source sizes, extraction methods, corpus hash, corpus id, version, and chunk count. Each JSONL chunk records a stable id, source metadata, source hash, and chunk-text hash.
+- `scripts/build_quickstart_corpus.py --verify` validates deterministic generated output without rewriting. `scripts/evaluate_quickstart.py` runs offline demo queries and reports returned chunk ids, source types, rank positions, profile/backend, and latency.
+- Retrieval responses now identify `rag_profile`, `retrieval_backend`, `corpus_id` or `index_id`, `result_count`, `fallback_used`, and `warnings`. Lexical scores are labelled `bm25_raw` ranking scores, not confidence or probability.
+- `/health` is liveness only. `/ready` reports configured-profile readiness. `/capabilities` reports supported profiles/backends and synthesis capability.
+- Deterministic synthesis now reports `synthesis_backend=deterministic` and `llm_used=false`; successful vLLM synthesis reports `synthesis_backend=vllm` and `llm_used=true`; vLLM failure with deterministic fallback sets `fallback_used=true` and emits a warning.
+- Full semantic RAG remains explicit via `RAG_PROFILE=full`, preserves the Chroma/BGE/reranker pipeline, and reports unavailable when dependencies or a non-empty index are absent. It does not fall back to quickstart.
+- `RAG_AUTO_INGEST=false` is the documented default, and normal service startup does not ingest the full corpus.
+
+Batch 5 limitations still open:
+
+- Full semantic ingestion and full Chroma rebuild were intentionally not run.
+- Full-profile clean-machine execution is not proven.
+- Quickstart lexical retrieval does not prove semantic retrieval quality.
+- No model download occurred during quickstart validation.
+- No formal under-10-minute or four-core timing claim is made; that remains Batch 10.
+- Root one-click deployment remains Batch 7.
+
 ## H. Ordered 15-batch remediation plan
 
 | Batch | Goal | Expected files/components | Acceptance gate | Risks |
@@ -259,7 +284,7 @@ Batch 4 validation evidence:
 | 2. Simulation artifact cleanup and traceable fixtures | Completed in Batch 2: preserved the `phase_bootstrap_normal` recorded fixture, documented provenance/checksums, added parser fixture tests, and removed tracked bulk generated/results artifacts. | `CODE/Simulation/fixtures/replay/phase_bootstrap_normal`, `CODE/Simulation/app/scenarios/results`, `CODE/Simulation/app/scenarios/generated`, `CODE/Simulation/tests/test_replay_fixtures.py`, `scripts/check_repo_hygiene.py`. | Runtime directories track only README.md and `.gitkeep`; fixture manifest and checksums validate; production KPI parser reads the recorded `.sca`. | Fixture proves parser compatibility with one recorded healthy bootstrap run only; live Simu5G startup and degraded/fault replay remain later-batch work. |
 | 3. Canonical ports, environment, and API contracts | Completed in Batch 3: established canonical single-node ports, env variables, Simulation/RAG/vLLM/Gateway/Agent/UI contracts, and active Tailscale removal. | `.env.example`, `CODE/.env.example`, `contracts/services.json`, `DOCs/SERVICE_CONTRACTS.md`, Agent/Gateway/UI/RAG/Simulation config and contract tests, `scripts/check_repo_hygiene.py`. | Offline contract tests and hygiene checks validate unique canonical ports, configurable URLs, JSON Simulation calls, structured RAG retrieval, vLLM path construction, and no active/default Tailscale dependency. | Root one-click deployment is still deferred to Batch 7; Simulation truthful replay/live dual-mode behavior remains Batch 4. |
 | 4. Simulation dual-mode design | Completed in Batch 4: separated quickstart replay/fixture mode from live Simu5G execution. | Simulation config, fixture loader, readiness probes, API dispatch, docs/tests. | CPU-safe replay works without Simu5G; live mode reports structured unavailable/failure unless explicitly enabled and ready. | Full live Simu5G execution is still unproven on this checkout. |
-| 5. RAG quickstart/prebuilt-index strategy | Avoid full ingestion in default demo while preserving rebuild path. | Small prebuilt/demo index or fixture corpus, ingestion docs. | Fresh clone can answer demo RAG queries quickly. | Shipping stale or oversized index artifacts. |
+| 5. RAG quickstart/prebuilt-index strategy | Completed in Batch 5: added default offline quickstart corpus/profile while preserving explicit full semantic mode. | `CODE/RAG/quickstart`, RAG profile config, lexical retriever, readiness/capabilities, docs/tests/hygiene. | Quickstart corpus verifies offline, demo queries retrieve evidence, API metadata identifies profile/backend, full mode never silently falls back. | Full semantic rebuild, clean-machine full execution, one-click deployment, and formal timing remain later-batch risks. |
 | 6. CPU/no-GPU LLM and OPEA fallback strategy | Make default LLM path CPU-safe while keeping OPEA/GPU options. | Env profiles, fallback docs, optional vLLM profile. | Demo flow works on CPU-only single node. | Quality or latency regressions in CPU fallback. |
 | 7. Root one-click Compose/deploy script | Add root deployment entry point. | `docker-compose.yml`, `deploy.sh`, root `.env.example`. | One documented command starts the submission stack. | Port conflicts, slow image builds, missing health checks. |
 | 8. Automated tests | Add focused unit and contract tests for critical interfaces. | Tests under component test folders and root smoke helpers. | Lightweight tests pass without Docker/model startup. | Tests becoming coupled to unavailable services. |

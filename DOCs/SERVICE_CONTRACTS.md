@@ -7,7 +7,7 @@ Batch 3 establishes a single-node service contract for AINN-CoPilot / TelcoMind.
 | Service | Host port | Container port | Native host URL | Future Docker URL | Health |
 | --- | ---: | ---: | --- | --- | --- |
 | Simulation API | 7000 | 7000 | `http://localhost:7000` | `http://simulation:7000` | `/health` liveness, `/ready` readiness |
-| RAG API | 7001 | 7001 | `http://localhost:7001` | `http://rag:7001` | `/health` |
+| RAG API | 7001 | 7001 | `http://localhost:7001` | `http://rag:7001` | `/health` liveness, `/ready` readiness |
 | vLLM/OpenAI API | 8080 | 8000 | `http://localhost:8080` | `http://vllm:8080` | image-dependent `/health` |
 | Gateway API | 8888 | 8888 | `http://localhost:8888` | `http://gateway:8888` | `/v1/health`, `/health` |
 | Agent API | 9090 | 9090 | `http://localhost:9090` | `http://agent:9090` | `/v1/health_check` |
@@ -30,6 +30,12 @@ Batch 3 establishes a single-node service contract for AINN-CoPilot / TelcoMind.
 | `SIMULATION_REPLAY_STRICT_CHECKSUMS` | Verify replay fixture SHA-256 checksums | `true` | `true` |
 | `SIMULATION_LIVE_ENABLED` | Enable real Simu5G/OMNeT++ live execution path | `false` | `false` |
 | `RAG_PORT` | RAG host port | `7001` | `7001` |
+| `RAG_PROFILE` | RAG profile, exactly `quickstart` or `full` | `quickstart` | `quickstart` |
+| `RAG_QUICKSTART_CORPUS_PATH` | Quickstart JSONL corpus path, resolved from `CODE/RAG` when relative | `quickstart/corpus.jsonl` | `quickstart/corpus.jsonl` |
+| `RAG_QUICKSTART_TOP_K` | Quickstart default retrieval count | `5` | `5` |
+| `RAG_FULL_INDEX_PATH` | Existing Chroma path for full semantic mode | `/data/chroma` | `CODE/RAG/storage/chroma` |
+| `RAG_AUTO_INGEST` | Whether service startup may ingest the full corpus | `false` | `false` |
+| `RAG_STRICT_PROVENANCE` | Verify quickstart source and chunk SHA-256 hashes | `true` | `true` |
 | `VLLM_PORT` | vLLM host port | `8080` | `8080` |
 | `GATEWAY_PORT` | Gateway host port | `8888` | `8888` |
 | `AGENT_PORT` | Agent host port | `9090` | `9090` |
@@ -119,6 +125,11 @@ Simulation health paths:
 
 ## RAG API
 
+RAG has two explicit profiles:
+
+- `quickstart`: default CPU-safe offline profile using `CODE/RAG/quickstart/corpus.jsonl` and deterministic lexical BM25-style ranking. It does not initialize Chroma, BGE embeddings, rerankers, CUDA, vLLM, or full PDF ingestion at startup.
+- `full`: advanced semantic profile using the existing Chroma/BGE/reranker pipeline. It requires an existing non-empty Chroma collection or explicit `/ingest` in full mode. It never receives quickstart fallback.
+
 Canonical structured retrieval endpoint: `POST /v1/retrievaltool/json`
 
 ```json
@@ -128,7 +139,7 @@ Canonical structured retrieval endpoint: `POST /v1/retrievaltool/json`
 }
 ```
 
-The response is `RetrievalResponse` with `query`, `answer_context`, structured `sources`, and `raw.result_count`. Source citations preserve `source`, `title`, `section`, `chunk`, `page`, `kind`, and `source_type` when available. Empty retrieval returns a valid response with an empty `sources` list; service failures are HTTP/client errors.
+The response is `RetrievalResponse` with `query`, `answer_context`, structured `sources`, `raw.result_count`, `rag_profile`, `retrieval_backend`, `corpus_id` or `index_id`, `result_count`, `fallback_used`, and `warnings`. Source citations preserve `source`, `title`, `section`, `chunk`, `page`, `kind`, `source_type`, `score_type`, and backend/profile metadata when available. Empty retrieval returns a valid response with an empty `sources` list; service failures are HTTP/client errors. Lexical BM25 scores are raw ranking scores, not confidence, probability, or semantic similarity.
 
 Text compatibility endpoint: `POST /v1/retrievaltool`
 
@@ -145,7 +156,13 @@ Canonical synthesis endpoint: `POST /synthesize`
 }
 ```
 
-Synthesis returns `answer`, `confidence`, structured `citations`, `assumptions`, `recommended_action`, `used_simulation_kpis`, `intent_type`, and `retrieval_context_count`. If vLLM is disabled or unavailable, deterministic fallback is reported in assumptions and is not labelled as vLLM output.
+Synthesis returns `answer`, `confidence`, structured `citations`, `assumptions`, `recommended_action`, `used_simulation_kpis`, `intent_type`, `retrieval_context_count`, `synthesis_backend`, `llm_used`, `fallback_used`, and `warnings`. If vLLM is disabled or unavailable, deterministic fallback is reported and is not labelled as vLLM output.
+
+RAG health paths:
+
+- `GET /health`: process liveness only. It reports the configured profile/backend but does not claim semantic index readiness.
+- `GET /ready`: returns `200` when the configured profile is ready and `503` when unavailable. Quickstart readiness validates corpus and provenance. Full readiness checks dependencies and a usable non-empty collection without silently creating a successful quickstart response.
+- `GET /capabilities`: reports supported profiles/backends, active profile, deterministic synthesis availability, and whether vLLM is configured, without exposing secrets or absolute local paths.
 
 ## vLLM API
 

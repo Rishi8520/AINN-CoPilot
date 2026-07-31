@@ -1,11 +1,13 @@
 import hashlib
 import json
 import urllib.request
-import torch
-import chromadb
-from sentence_transformers import CrossEncoder, SentenceTransformer
+from importlib.util import find_spec
 from app import config
 from app.chunking import Chunk
+
+
+class FullRAGUnavailable(RuntimeError):
+    pass
 
 
 def _batch_slices(total: int, batch_size: int):
@@ -15,25 +17,40 @@ def _batch_slices(total: int, batch_size: int):
 
 class TelcoVectorStore:
     def __init__(self):
+        if not config.RAG_FULL_INDEX_PATH.exists():
+            raise FullRAGUnavailable("Full RAG index path is missing.")
+        try:
+            if not any(config.RAG_FULL_INDEX_PATH.iterdir()):
+                raise FullRAGUnavailable("Full RAG index path is empty.")
+        except OSError as exc:
+            raise FullRAGUnavailable(f"Full RAG index path cannot be inspected: {exc}") from exc
+        try:
+            import chromadb
+            import torch
+            from sentence_transformers import CrossEncoder, SentenceTransformer
+        except ImportError as exc:
+            raise FullRAGUnavailable(f"Full RAG dependency is missing: {exc.name}") from exc
+
+        self._torch = torch
+        self._cross_encoder_cls = CrossEncoder
         device = self._choose_device()
         self.embedding_model = SentenceTransformer(config.EMBEDDING_MODEL, device=device)
         self.reranker = self._load_reranker(device)
         self.client = chromadb.PersistentClient(path=config.CHROMA_DIR)
-        self.collection = self.client.get_or_create_collection(
-            name=config.COLLECTION_NAME,
-            metadata={"hnsw:space": "cosine"},
-        )
+        self.collection = self.client.get_collection(name=config.COLLECTION_NAME)
+        if self.collection.count() <= 0:
+            raise FullRAGUnavailable("Full RAG Chroma collection is empty.")
 
     def _choose_device(self) -> str:
         if config.RAG_DEVICE in {"cpu", "cuda"}:
             return config.RAG_DEVICE
-        return "cuda" if torch.cuda.is_available() else "cpu"
+        return "cuda" if self._torch.cuda.is_available() else "cpu"
 
     def _load_reranker(self, device: str):
         if config.RERANKER_BACKEND == "disabled":
             return None
         try:
-            return CrossEncoder(config.RERANKER_MODEL, device=device)
+            return self._cross_encoder_cls(config.RERANKER_MODEL, device=device)
         except Exception:
             return None
 
@@ -214,3 +231,67 @@ class TelcoVectorStore:
             candidates.sort(key=lambda x: x["score"], reverse=True)
 
         return candidates[: config.RERANK_TOP_K]
+
+
+class TelcoVectorIngestStore(TelcoVectorStore):
+    def __init__(self):
+        try:
+            import chromadb
+            import torch
+            from sentence_transformers import CrossEncoder, SentenceTransformer
+        except ImportError as exc:
+            raise FullRAGUnavailable(f"Full RAG dependency is missing: {exc.name}") from exc
+
+        self._torch = torch
+        self._cross_encoder_cls = CrossEncoder
+        device = self._choose_device()
+        self.embedding_model = SentenceTransformer(config.EMBEDDING_MODEL, device=device)
+        self.reranker = self._load_reranker(device)
+        self.client = chromadb.PersistentClient(path=config.CHROMA_DIR)
+        self.collection = self.client.get_or_create_collection(
+            name=config.COLLECTION_NAME,
+            metadata={"hnsw:space": "cosine"},
+        )
+
+
+def full_readiness() -> dict:
+    details = {
+        "rag_profile": "full",
+        "retrieval_backend": "chroma_bge_reranker",
+        "index_path_configured": bool(config.RAG_FULL_INDEX_PATH),
+        "index_present": config.RAG_FULL_INDEX_PATH.exists(),
+        "dependencies": {},
+        "collection": config.COLLECTION_NAME,
+        "chunk_count": 0,
+        "ready": False,
+        "warnings": [],
+    }
+
+    for module in ["chromadb", "sentence_transformers", "torch"]:
+        details["dependencies"][module] = find_spec(module) is not None
+    if not all(details["dependencies"].values()):
+        details["warnings"].append("Full RAG dependencies are not all importable.")
+        return details
+    if not details["index_present"]:
+        details["warnings"].append("Full RAG index path is missing.")
+        return details
+    try:
+        if not any(config.RAG_FULL_INDEX_PATH.iterdir()):
+            details["warnings"].append("Full RAG index path is empty.")
+            return details
+    except OSError as exc:
+        details["warnings"].append(f"Full RAG index path cannot be inspected: {exc}")
+        return details
+
+    try:
+        import chromadb
+
+        client = chromadb.PersistentClient(path=str(config.RAG_FULL_INDEX_PATH))
+        collection = client.get_collection(name=config.COLLECTION_NAME)
+        details["chunk_count"] = int(collection.count())
+        details["ready"] = details["chunk_count"] > 0
+        if not details["ready"]:
+            details["warnings"].append("Full RAG collection is empty.")
+    except Exception as exc:
+        details["warnings"].append(f"Full RAG collection is unavailable: {exc}")
+    return details

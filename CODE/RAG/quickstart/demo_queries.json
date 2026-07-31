@@ -1,0 +1,51 @@
+[
+  {
+    "query": "Why might handover failures increase near cell borders?",
+    "intent_type": "DIAGNOSTIC",
+    "expected_source_types": ["runbook", "scenario", "spec"],
+    "expected_chunk_ids": ["qs-handover-failure-runbook-handover-failure-01", "qs-simulation-scenario-mapping-handover-failure-01"],
+    "notes": "Network diagnosis query grounded in handover runbook, scenario mapping, and handover standards snippets."
+  },
+  {
+    "query": "Which KPIs should I check before energy saving changes?",
+    "intent_type": "OPTIMIZATION",
+    "expected_source_types": ["runbook", "scenario"],
+    "expected_chunk_ids": ["qs-energy-optimization-runbook-energy-optimization-01"],
+    "notes": "KPI and runbook query grounded in energy optimization guardrails."
+  },
+  {
+    "query": "What does the quickstart corpus say about failed legacy handover performance measurements?",
+    "intent_type": "GENERAL_QNA",
+    "expected_source_types": ["spec"],
+    "expected_chunk_ids": ["qs-3gpp-ts-28-552-5g-performance-measurements-handover-performance-measurements-01"],
+    "notes": "Standards-grounded query against the 3GPP performance measurements snippet."
+  },
+  {
+    "query": "How should interference with low SINR and high PRB utilization be investigated?",
+    "intent_type": "DIAGNOSTIC",
+    "expected_source_types": ["runbook", "scenario"],
+    "expected_chunk_ids": ["qs-interference-runbook-interference-hotspot-01", "qs-simulation-scenario-mapping-interference-hotspot-03"],
+    "notes": "Scenario and fault-mapping query for interference or hotspot evidence."
+  },
+  {
+    "query": "What does NG-RAN NRM coverage include?",
+    "intent_type": "GENERAL_QNA",
+    "expected_source_types": ["spec"],
+    "expected_chunk_ids": ["qs-3gpp-ts-28-541-5g-network-resource-model-nrm-scope-01"],
+    "notes": "Standards query grounded in the 3GPP network resource model scope snippet."
+  },
+  {
+    "query": "What O-RAN security architecture language is present?",
+    "intent_type": "GENERAL_QNA",
+    "expected_source_types": ["spec"],
+    "expected_chunk_ids": ["qs-etsi-ts-103-982-oran-architecture-description-o-ran-architecture-security-and-interfaces-01"],
+    "notes": "O-RAN architecture query grounded in the ETSI O-RAN architecture snippet."
+  },
+  {
+    "query": "How can I plan a Mars rover battery swap using this telecom corpus?",
+    "intent_type": "GENERAL_QNA",
+    "expected_source_types": [],
+    "expected_chunk_ids": [],
+    "notes": "Out-of-scope query; evaluator expects no required evidence and treats empty or weak lexical retrieval honestly."
+  }
+]

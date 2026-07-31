@@ -22,7 +22,11 @@
       "native_url": "http://localhost:7001",
       "docker_url": "http://rag:7001",
       "health_path": "/health",
-      "api_paths": ["/v1/retrievaltool/json", "/v1/retrievaltool", "/synthesize"]
+      "readiness_path": "/ready",
+      "capabilities_path": "/capabilities",
+      "supported_profiles": ["quickstart", "full"],
+      "default_profile": "quickstart",
+      "api_paths": ["/v1/retrievaltool/json", "/v1/retrievaltool", "/synthesize", "/ready", "/capabilities"]
     },
     {
       "name": "vllm",

@@ -23,6 +23,10 @@ class SourceChunk(BaseModel):
     source_type: Optional[str] = None
     chunk: Optional[int] = None
     page: Optional[int] = None
+    score_type: Optional[str] = None
+    retrieval_backend: Optional[str] = None
+    corpus_profile: Optional[str] = None
+    corpus_id: Optional[str] = None
 
 
 class SynthesisCitation(BaseModel):
@@ -54,13 +58,24 @@ class SynthesisResponse(BaseModel):
     used_simulation_kpis: Optional[dict[str, Any]] = None
     intent_type: Optional[str] = None
     retrieval_context_count: int
+    synthesis_backend: str = "deterministic"
+    llm_used: bool = False
+    fallback_used: bool = False
+    warnings: list[str] = Field(default_factory=list)
 
 
 class RetrievalResponse(BaseModel):
     query: str
     answer_context: str
     sources: list[SourceChunk]
-    raw: dict[str, Any] = {}
+    raw: dict[str, Any] = Field(default_factory=dict)
+    rag_profile: str = "quickstart"
+    retrieval_backend: str = "lexical_bm25"
+    corpus_id: Optional[str] = None
+    index_id: Optional[str] = None
+    result_count: int = 0
+    fallback_used: bool = False
+    warnings: list[str] = Field(default_factory=list)
 
 
 class IngestResponse(BaseModel):

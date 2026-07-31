@@ -1,0 +1,75 @@
+{
+  "chunk_count": 10,
+  "corpus_id": "telcomind-rag-quickstart",
+  "corpus_sha256": "09731c6e5e63547e88c0eb4a5205461875dec470878abcdde82b3a9a1e3ce4f5",
+  "description": "Small offline lexical RAG corpus derived from repository knowledge_base sources.",
+  "generated_by": "scripts/build_quickstart_corpus.py",
+  "sources": [
+    {
+      "extraction_methods": [
+        "json.text"
+      ],
+      "sha256": "583eda8f1c6204cb6c2fb416da65d91be835f8eabdc328847becb2c2d1b2d544",
+      "size_bytes": 451,
+      "source": "knowledge_base/runbooks/energy_optimization_runbook.json"
+    },
+    {
+      "extraction_methods": [
+        "json.text"
+      ],
+      "sha256": "0ddd799d65bef67cea81dfe4161d31f887b15a9b3498104b835447e39c5f4fe7",
+      "size_bytes": 471,
+      "source": "knowledge_base/runbooks/handover_failure_runbook.json"
+    },
+    {
+      "extraction_methods": [
+        "json.text"
+      ],
+      "sha256": "7c6fda734f8950ff1df06f01fd6b5fe606f4ad0887f18b694eaa6473f249795e",
+      "size_bytes": 486,
+      "source": "knowledge_base/runbooks/interference_runbook.json"
+    },
+    {
+      "extraction_methods": [
+        "markdown.heading"
+      ],
+      "sha256": "fdd94d648caf2af3fc8f5883294e04a78d47ae6e6581e254cc4e461e73e3fe67",
+      "size_bytes": 5167,
+      "source": "knowledge_base/scenarios/simulation_scenario_mapping.md"
+    },
+    {
+      "extraction_methods": [
+        "pypdf.page.term_window"
+      ],
+      "sha256": "e57d0515f52ebd2d0d7f7bed00dd61c1e73634291a9472fe493b5d8f060e6fb5",
+      "size_bytes": 6762931,
+      "source": "knowledge_base/specs/3gpp_ts_28_541_5g_network_resource_model.pdf"
+    },
+    {
+      "extraction_methods": [
+        "pypdf.page.term_window"
+      ],
+      "sha256": "e52d6015fefd61602999a9a53c84b8b0df51005ac7b1004098985054d6d2e0f3",
+      "size_bytes": 2718719,
+      "source": "knowledge_base/specs/3gpp_ts_28_552_5g_performance_measurements.pdf"
+    },
+    {
+      "extraction_methods": [
+        "pypdf.page.term_window"
+      ],
+      "sha256": "30ee517bb08c1c97c39cdc89a78c9e753926c848e473ebf345d6d9d5c99ec7d0",
+      "size_bytes": 3897831,
+      "source": "knowledge_base/specs/3gpp_ts_38_300_nr_ng_ran_overall_description.pdf"
+    },
+    {
+      "extraction_methods": [
+        "pypdf.page.term_window"
+      ],
+      "sha256": "d8878204061b720b4462d28a2de1990fdf3f3286bdcdf473f810e4c12ee0e044",
+      "size_bytes": 1388713,
+      "source": "knowledge_base/specs/etsi_ts_103_982_oran_architecture_description.pdf"
+    }
+  ],
+  "strict_provenance_supported": true,
+  "version": "2026-08-01.batch5"
+}

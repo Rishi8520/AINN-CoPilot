@@ -177,6 +177,8 @@ def test_rag_route_constants_match_canonical_paths():
     service_source = (RAG_ROOT / "app" / "rag_service.py").read_text(encoding="utf-8")
 
     assert 'HEALTH_PATH = "/health"' in service_source
+    assert 'READY_PATH = "/ready"' in service_source
+    assert 'CAPABILITIES_PATH = "/capabilities"' in service_source
     assert 'RETRIEVE_PATH = "/v1/retrievaltool/json"' in service_source
     assert 'RETRIEVE_TEXT_COMPAT_PATH = "/v1/retrievaltool"' in service_source
     assert 'SYNTHESIZE_PATH = "/synthesize"' in service_source
@@ -200,6 +202,8 @@ def test_rag_routes_can_register_without_model_loading(monkeypatch):
     paths = {route.path for route in service.app.routes}
 
     assert "/health" in paths
+    assert "/ready" in paths
+    assert "/capabilities" in paths
     assert "/v1/retrievaltool/json" in paths
     assert "/v1/retrievaltool" in paths
     assert "/synthesize" in paths
@@ -316,6 +320,8 @@ def test_synthesis_default_llm_disabled_uses_deterministic_path(monkeypatch):
 
     assert response.answer.startswith("Based on the retrieved context")
     assert response.citations[0].title == "Handover Failure Runbook"
+    assert response.synthesis_backend == "deterministic"
+    assert response.llm_used is False
 
 
 def test_synthesis_llm_success_replaces_answer_and_preserves_contract(monkeypatch):
@@ -360,6 +366,8 @@ def test_synthesis_llm_success_replaces_answer_and_preserves_contract(monkeypatc
     assert response.used_simulation_kpis == {"handover_success_rate": 0.72}
     assert response.intent_type == "DIAGNOSTIC"
     assert response.retrieval_context_count == 1
+    assert response.synthesis_backend == "vllm"
+    assert response.llm_used is True
     assert captured["url"] == "http://llm.example/v1/chat/completions"
     assert captured["timeout"] == 7
     assert captured["payload"]["model"] == "Qwen/Qwen2.5-0.5B-Instruct"
@@ -384,6 +392,9 @@ def test_synthesis_llm_failure_falls_back_deterministically(monkeypatch):
 
     assert response.answer.startswith("Based on the retrieved context")
     assert "deterministic fallback synthesis was used" in response.assumptions[-1]
+    assert response.synthesis_backend == "deterministic"
+    assert response.llm_used is False
+    assert response.fallback_used is True
 
 
 def test_demo_query_json_exists_parses_and_has_required_fields():

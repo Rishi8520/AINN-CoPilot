@@ -22,6 +22,10 @@ SIM_FIXTURES = Path("CODE/Simulation/fixtures/replay")
 SIM_FIXTURE_MANIFEST = SIM_FIXTURES / "phase_bootstrap_normal" / "manifest.json"
 ALLOWED_RUNTIME_TRACKED = {"README.md", ".gitkeep"}
 RAG_CHROMA = Path("CODE/RAG/storage/chroma")
+RAG_QUICKSTART_DIR = Path("CODE/RAG/quickstart")
+RAG_QUICKSTART_CORPUS = RAG_QUICKSTART_DIR / "corpus.jsonl"
+RAG_QUICKSTART_MANIFEST = RAG_QUICKSTART_DIR / "manifest.json"
+RAG_QUICKSTART_MAX_BYTES = 2 * 1024 * 1024
 RAG_STORAGE_CANDIDATES = [
     Path("CODE/RAG/storage"),
     RAG_CHROMA,
@@ -62,6 +66,14 @@ TRACKED_CACHE_PATTERNS = [
     "__pycache__/*",
     "*.pyc",
     "*.pyo",
+    "CODE/RAG/storage/chroma/*",
+    "CODE/RAG/storage/chroma/**/*",
+    "*/huggingface/*",
+    "*/huggingface/**/*",
+    "*/model_cache/*",
+    "*/model_cache/**/*",
+    "*/torch_cache/*",
+    "*/torch_cache/**/*",
 ]
 SECRET_ENV_NAMES = {
     ".env",
@@ -295,6 +307,7 @@ def main() -> int:
     counts = {"PASS": 0, "WARN": 0, "FAIL": 0}
     tracked = run_git(["ls-files"], counts)
     untracked = run_git(["ls-files", "--others", "--exclude-standard"], counts)
+    versioned_candidates = set(tracked) | set(untracked)
 
     local = safe_walk(ROOT, skip_general=True)
     emit(
@@ -464,6 +477,96 @@ def main() -> int:
         else:
             emit("PASS", f"RAG runtime storage absent at {rel_path.as_posix()}", counts)
 
+    quickstart_failures = []
+    corpus_path = ROOT / RAG_QUICKSTART_CORPUS
+    manifest_path = ROOT / RAG_QUICKSTART_MANIFEST
+    if not corpus_path.exists():
+        quickstart_failures.append(f"missing {RAG_QUICKSTART_CORPUS.as_posix()}")
+    if not manifest_path.exists():
+        quickstart_failures.append(f"missing {RAG_QUICKSTART_MANIFEST.as_posix()}")
+    quickstart_untracked = []
+    if RAG_QUICKSTART_CORPUS.as_posix() not in versioned_candidates:
+        quickstart_failures.append("quickstart corpus is not tracked or reported as an untracked commit candidate")
+    elif RAG_QUICKSTART_CORPUS.as_posix() not in tracked:
+        quickstart_untracked.append(RAG_QUICKSTART_CORPUS.as_posix())
+    if RAG_QUICKSTART_MANIFEST.as_posix() not in versioned_candidates:
+        quickstart_failures.append("quickstart manifest is not tracked or reported as an untracked commit candidate")
+    elif RAG_QUICKSTART_MANIFEST.as_posix() not in tracked:
+        quickstart_untracked.append(RAG_QUICKSTART_MANIFEST.as_posix())
+    if corpus_path.exists() and corpus_path.stat().st_size > RAG_QUICKSTART_MAX_BYTES:
+        quickstart_failures.append(
+            f"quickstart corpus exceeds {fmt_size(RAG_QUICKSTART_MAX_BYTES)}: {fmt_size(corpus_path.stat().st_size)}"
+        )
+    if corpus_path.exists() and manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            entries = [
+                json.loads(line)
+                for line in corpus_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+        except (OSError, json.JSONDecodeError) as exc:
+            quickstart_failures.append(f"quickstart corpus/manifest cannot be parsed: {exc}")
+        else:
+            if manifest.get("chunk_count") != len(entries):
+                quickstart_failures.append("quickstart manifest chunk_count mismatch")
+            if manifest.get("corpus_sha256") != hashlib.sha256(corpus_path.read_bytes()).hexdigest():
+                quickstart_failures.append("quickstart corpus sha256 mismatch")
+            sources = {source.get("source"): source for source in manifest.get("sources", [])}
+            if not sources:
+                quickstart_failures.append("quickstart manifest has no sources")
+            for source_rel, source in sources.items():
+                if not isinstance(source_rel, str) or Path(source_rel).is_absolute() or ".." in Path(source_rel).parts:
+                    quickstart_failures.append(f"quickstart source path is not portable: {source_rel}")
+                    continue
+                source_path = ROOT / "CODE/RAG" / source_rel
+                if not source_path.exists():
+                    quickstart_failures.append(f"quickstart source missing: {source_rel}")
+                    continue
+                if source_path.stat().st_size != source.get("size_bytes"):
+                    quickstart_failures.append(f"quickstart source size mismatch: {source_rel}")
+                if file_sha256(source_path) != source.get("sha256"):
+                    quickstart_failures.append(f"quickstart source sha256 mismatch: {source_rel}")
+            for entry in entries:
+                metadata = entry.get("metadata", {})
+                source_rel = metadata.get("source", "")
+                if Path(str(source_rel)).is_absolute() or ".." in Path(str(source_rel)).parts:
+                    quickstart_failures.append(f"quickstart chunk uses nonportable source: {entry.get('id')}")
+                if entry.get("source_sha256") != sources.get(source_rel, {}).get("sha256"):
+                    quickstart_failures.append(f"quickstart chunk source hash mismatch: {entry.get('id')}")
+                text = entry.get("text", "")
+                if hashlib.sha256(str(text).encode("utf-8")).hexdigest() != entry.get("text_sha256"):
+                    quickstart_failures.append(f"quickstart chunk text hash mismatch: {entry.get('id')}")
+    if quickstart_failures:
+        emit("FAIL", f"RAG quickstart corpus validation failures: {len(quickstart_failures)}", counts)
+        print_limited("quickstart corpus failures", quickstart_failures)
+    else:
+        emit(
+            "PASS",
+            f"RAG quickstart corpus and manifest validate under {fmt_size(RAG_QUICKSTART_MAX_BYTES)}",
+            counts,
+        )
+    if quickstart_untracked:
+        emit("WARN", "RAG quickstart corpus files are valid but not committed yet", counts)
+        print_limited("untracked quickstart paths", quickstart_untracked)
+
+    rag_default_findings = []
+    for rel_path in [Path(".env.example"), Path("CODE/.env.example"), Path("CODE/RAG/.env.example"), Path("CODE/RAG/docker-compose.yml")]:
+        path = ROOT / rel_path
+        if not path.exists():
+            rag_default_findings.append(f"{rel_path.as_posix()}: missing")
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if "RAG_PROFILE=quickstart" not in text and "RAG_PROFILE:-quickstart" not in text:
+            rag_default_findings.append(f"{rel_path.as_posix()}: RAG_PROFILE quickstart default missing")
+        if "RAG_AUTO_INGEST=false" not in text and "RAG_AUTO_INGEST:-false" not in text:
+            rag_default_findings.append(f"{rel_path.as_posix()}: RAG_AUTO_INGEST=false default missing")
+    if rag_default_findings:
+        emit("FAIL", f"RAG quickstart defaults are not consistently documented: {len(rag_default_findings)}", counts)
+        print_limited("RAG default findings", rag_default_findings)
+    else:
+        emit("PASS", "RAG examples and compose default to quickstart with auto-ingest disabled", counts)
+
     for filename in REQUIRED_ROOT_FILES:
         path = ROOT / filename
         if path.exists():
@@ -565,6 +668,8 @@ def main() -> int:
         emit("PASS", "approved empty disposable tracked artifacts are absent from working tree", counts)
 
     emit("WARN", "full live Simu5G execution has not been validated by the hygiene script", counts)
+    emit("WARN", "full semantic RAG clean-machine execution has not been validated by the hygiene script", counts)
+    emit("WARN", "formal four-core quickstart timing remains pending", counts)
     emit("PASS", "quickstart-oriented Simulation replay mode has explicit fixture validation checks", counts)
 
     if not (ROOT / "docker-compose.yml").exists() and not (ROOT / "deploy.sh").exists():
