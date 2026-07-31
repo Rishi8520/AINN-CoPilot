@@ -77,3 +77,7 @@ benchmark-results/
 local_benchmarks/
 test-results/
 e2e-results/
+
+# Submission archive and performance outputs
+dist/
+performance-results/
