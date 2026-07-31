@@ -83,3 +83,16 @@ The root Compose includes an optional `gpu-llm` profile for vLLM on port `8080`.
 ## Verified Scope
 
 This deployment is intended to prove the UI/Gateway/Agent/RAG/Simulation quickstart flow with replay provenance, lexical retrieval metadata, and deterministic synthesis metadata. It does not prove live Simu5G, full semantic RAG, vLLM/GPU behavior, OPEA certification, teammate-machine networking, or formal under-10-minute setup timing. Controlled timing evidence is deferred to Batch 10.
+
+## Batch 9 Demo Scenarios
+
+After the stack is already healthy, run meaningful end-to-end scenarios through the real Gateway:
+
+```bash
+python scripts/run_demo_scenarios.py --list
+python scripts/run_demo_scenarios.py
+python scripts/run_demo_scenarios.py --scenario grounded_diagnosis
+python scripts/run_demo_scenarios.py --with-failure-injection
+```
+
+The runner writes functional evidence under ignored `e2e-results/` and does not claim formal performance benchmarks.

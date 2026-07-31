@@ -7,6 +7,7 @@ Batch 8 adds a reproducible root test matrix for offline/static validation. The 
 .\test.ps1 -Fast
 .\test.ps1 -StaticOnly
 .\test.ps1 -WithSmoke
+.\test.ps1 -WithE2E
 .\test.ps1 -List
 ```
 
@@ -15,6 +16,7 @@ Batch 8 adds a reproducible root test matrix for offline/static validation. The 
 ./test.sh --fast
 ./test.sh --static-only
 ./test.sh --with-smoke
+./test.sh --with-e2e
 ./test.sh --list
 ```
 
@@ -48,6 +50,8 @@ Static-only mode runs hygiene, artifact integrity, and static configuration suit
 
 Smoke mode adds `scripts/smoke_test.py`, but only after checking that the root Compose stack is already running and healthy. It does not call `docker compose up`.
 
+Optional E2E mode runs `scripts/run_demo_scenarios.py` after the offline matrix succeeds. It requires an already running healthy stack, does not start services, and does not enable failure injection automatically.
+
 ## Local And Docker
 
 Local mode uses the first valid interpreter in this order: `--python`, `TEST_PYTHON`, the current interpreter, repository virtualenv candidates, then platform Python commands. It verifies Python, pytest, and minimal packages before running.
@@ -64,6 +68,13 @@ Files produced:
 - `test-results/summary.txt`
 - `test-results/logs/<suite>.log`
 - `test-results/junit/<suite>.xml`
+
+Batch 9 scenario runner outputs:
+
+- `e2e-results/summary.json`
+- `e2e-results/summary.md`
+- `e2e-results/logs/<scenario-id>-runN.json`
+- `e2e-results/logs/<scenario-id>-runN.log`
 
 Required suite failures, unavailable required suites, and timeouts return nonzero. Skipped platform checks are reported in JUnit as skipped, not passed.
 

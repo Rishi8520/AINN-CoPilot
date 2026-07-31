@@ -197,6 +197,16 @@ Gateway entry point: `POST /v1/chat`
 
 Gateway forwards to Agent `POST /v1/chat/completions`. Health/status paths are `/v1/health`, `/health`, and `/v1/agent/status`. UI uses `GATEWAY_BASE_URL` or `GATEWAY_URL`; browser-local default is `http://localhost:8888`.
 
+Batch 9 correlation metadata:
+
+- Gateway creates `gateway_request_id` and forwards `request_id` to Agent.
+- Agent response includes `request_id` and preserves `thread_id`.
+- Simulation replay responses preserve `run_id` and fixture provenance metadata.
+- RAG retrieval preserves source chunk IDs and structured citation fields.
+- Synthesis preserves citation IDs and backend metadata (`synthesis_backend`, `llm_used`, `fallback_used`).
+
+Batch 9 adds `demo/quickstart_scenarios.json` and `scripts/run_demo_scenarios.py` for tracked meaningful E2E validation through the real Gateway.
+
 ## Timeout And Error Behavior
 
 Simulation tool calls use a 120 second timeout. RAG retrieval tool calls use a 30 second timeout. Gateway health probes and startup probes are environment-configurable. Client code must surface non-2xx, timeout, connection, and malformed JSON failures as errors rather than returning fake success.

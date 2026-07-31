@@ -50,6 +50,8 @@ submissions
 submissions/**
 test-results
 test-results/**
+e2e-results
+e2e-results/**
 *.zip
 *.tar
 *.tar.gz

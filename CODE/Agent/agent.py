@@ -15,6 +15,7 @@ import json
 import httpx
 import asyncio
 import logging
+import re
 from enum import Enum
 from typing import Any, Optional
 from pydantic import BaseModel
@@ -88,8 +89,9 @@ def classify_intent(query: str) -> IntentType:
     Returns IntentType so gateway.py can decide routing strategy.
     """
     q = query.lower()
+    tokens = set(re.findall(r"[a-z0-9_+-]+", q))
 
-    if any(k in q for k in ["health", "status", "ping", "alive", "ready"]):
+    if any(k in tokens for k in ["health", "status", "ping", "alive", "ready"]):
         return IntentType.HEALTH_CHECK
 
     has_sim = any(k in q for k in _SIM_KEYWORDS)

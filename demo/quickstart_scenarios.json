@@ -1,0 +1,293 @@
+{
+  "schema_version": 1,
+  "description": "TelcoMind quickstart E2E scenarios for Gateway->Agent->RAG/Simulation validation.",
+  "default_base_url": "http://localhost:8888",
+  "scenarios": [
+    {
+      "id": "grounded_diagnosis",
+      "title": "Grounded baseline diagnosis",
+      "purpose": "Validate a supported operator diagnosis path with replay KPIs and grounded retrieval citations through Gateway.",
+      "category": "hybrid",
+      "gateway_request": {
+        "query": "Run a baseline replay simulation with 20 UEs and diagnose likely throughput and mobility risks with citations.",
+        "thread_id": "demo-grounded-diagnosis",
+        "stream": false
+      },
+      "expected_services": ["gateway", "agent", "simulation", "rag", "synthesis"],
+      "expected_http_status": 200,
+      "required_response_fields": [
+        "id",
+        "status",
+        "response",
+        "simulation",
+        "rag",
+        "synthesis",
+        "evidence",
+        "choices"
+      ],
+      "forbidden_claims": [
+        "live Simu5G executed",
+        "semantic retrieval used",
+        "GPU inference occurred",
+        "LLM produced the response"
+      ],
+      "expected_provenance": {
+        "simulation_live": false,
+        "fixture_id": "phase_bootstrap_normal",
+        "mode_label": "recorded_replay",
+        "checksums_verified": true,
+        "created_from_existing_repository_artifact": true
+      },
+      "expected_source_types": ["runbook", "scenario", "spec"],
+      "allowlisted_chunk_ids": [
+        "qs-handover-failure-runbook-handover-failure-01",
+        "qs-interference-runbook-interference-hotspot-01",
+        "qs-simulation-scenario-mapping-handover-failure-01"
+      ],
+      "expected_simulation_mode": "replay",
+      "expected_rag_profile": "quickstart",
+      "expected_retrieval_backend": "lexical_bm25",
+      "expected_synthesis_backend": "deterministic",
+      "allow_empty_retrieval": false,
+      "timeout_seconds": 60,
+      "destructive": false,
+      "notes": "No assertion depends on exact wording; only structure, metadata, and provenance."
+    },
+    {
+      "id": "standards_question",
+      "title": "Standards evidence question",
+      "purpose": "Validate standards/spec evidence retrieval and citation metadata preservation end to end.",
+      "category": "standards",
+      "gateway_request": {
+        "query": "What do 3GPP and O-RAN references say about handover failure signaling and measurement handling?",
+        "thread_id": "demo-standards",
+        "stream": false
+      },
+      "expected_services": ["gateway", "agent", "simulation", "rag", "synthesis"],
+      "expected_http_status": 200,
+      "required_response_fields": ["status", "rag", "synthesis", "evidence"],
+      "forbidden_claims": [
+        "live Simu5G executed",
+        "semantic retrieval used",
+        "LLM produced the response"
+      ],
+      "expected_provenance": {
+        "simulation_live": false,
+        "fixture_id": "phase_bootstrap_normal"
+      },
+      "expected_source_types": ["spec"],
+      "allowlisted_chunk_ids": [
+        "qs-3gpp-ts-28-552-5g-performance-measurements-handover-performance-measurements-01",
+        "qs-3gpp-ts-38-300-nr-ng-ran-overall-description-handover-preparation-01",
+        "qs-etsi-ts-103-982-oran-architecture-description-o-ran-architecture-security-and-interfaces-01"
+      ],
+      "expected_simulation_mode": "replay",
+      "expected_rag_profile": "quickstart",
+      "expected_retrieval_backend": "lexical_bm25",
+      "expected_synthesis_backend": "deterministic",
+      "allow_empty_retrieval": false,
+      "timeout_seconds": 60,
+      "destructive": false,
+      "notes": "Simulation may still be invoked by current Agent orchestration; assertions accept that behavior."
+    },
+    {
+      "id": "runbook_kpi_question",
+      "title": "Runbook-guided KPI interpretation",
+      "purpose": "Validate runbook evidence plus replay KPI context without fabricating KPI values.",
+      "category": "operations",
+      "gateway_request": {
+        "query": "Explain replay KPI implications for interference and load balancing using runbook guidance.",
+        "thread_id": "demo-runbook-kpi",
+        "stream": false
+      },
+      "expected_services": ["gateway", "agent", "simulation", "rag", "synthesis"],
+      "expected_http_status": 200,
+      "required_response_fields": ["status", "simulation", "rag", "synthesis", "evidence"],
+      "forbidden_claims": [
+        "live Simu5G executed",
+        "LLM produced the response"
+      ],
+      "expected_provenance": {
+        "simulation_live": false,
+        "fixture_id": "phase_bootstrap_normal"
+      },
+      "expected_source_types": ["runbook"],
+      "allowlisted_chunk_ids": [
+        "qs-interference-runbook-interference-hotspot-01",
+        "qs-energy-optimization-runbook-energy-optimization-01",
+        "qs-handover-failure-runbook-handover-failure-01"
+      ],
+      "expected_simulation_mode": "replay",
+      "expected_rag_profile": "quickstart",
+      "expected_retrieval_backend": "lexical_bm25",
+      "expected_synthesis_backend": "deterministic",
+      "allow_empty_retrieval": false,
+      "timeout_seconds": 60,
+      "destructive": false,
+      "notes": "KPI checks are structural: source must be replay payload or explicit caller input."
+    },
+    {
+      "id": "scenario_mapping_question",
+      "title": "Scenario mapping evidence",
+      "purpose": "Validate scenario/fault-mapping evidence while avoiding claims that a fault simulation was executed.",
+      "category": "scenario_mapping",
+      "gateway_request": {
+        "query": "Map likely causes for handover-failure symptoms using scenario-mapping evidence and cite sources.",
+        "thread_id": "demo-scenario-map",
+        "stream": false
+      },
+      "expected_services": ["gateway", "agent", "simulation", "rag", "synthesis"],
+      "expected_http_status": 200,
+      "required_response_fields": ["status", "rag", "synthesis", "evidence"],
+      "forbidden_claims": [
+        "fault simulation ran",
+        "live Simu5G executed",
+        "LLM produced the response"
+      ],
+      "expected_provenance": {
+        "simulation_live": false,
+        "fixture_id": "phase_bootstrap_normal"
+      },
+      "expected_source_types": ["scenario", "runbook"],
+      "allowlisted_chunk_ids": [
+        "qs-simulation-scenario-mapping-handover-failure-01"
+      ],
+      "expected_simulation_mode": "replay",
+      "expected_rag_profile": "quickstart",
+      "expected_retrieval_backend": "lexical_bm25",
+      "expected_synthesis_backend": "deterministic",
+      "allow_empty_retrieval": false,
+      "timeout_seconds": 60,
+      "destructive": false,
+      "notes": "Evidence should describe mapping and diagnostics, not claim unsupported fault execution."
+    },
+    {
+      "id": "out_of_scope_no_match",
+      "title": "Out-of-scope no-match",
+      "purpose": "Verify honest insufficient-evidence behavior and no fabricated citations for out-of-scope asks.",
+      "category": "negative",
+      "gateway_request": {
+        "query": "Provide 5G guidance for submarine quantum repeater maintenance procedures in deep ocean cables.",
+        "thread_id": "demo-no-match",
+        "stream": false
+      },
+      "expected_services": ["gateway", "agent", "simulation", "rag", "synthesis"],
+      "expected_http_status": 200,
+      "required_response_fields": ["status", "rag", "synthesis", "evidence"],
+      "forbidden_claims": [
+        "invented citation",
+        "semantic retrieval used",
+        "LLM produced the response"
+      ],
+      "expected_provenance": {
+        "simulation_live": false,
+        "fixture_id": "phase_bootstrap_normal"
+      },
+      "expected_source_types": [],
+      "expected_simulation_mode": "replay",
+      "expected_rag_profile": "quickstart",
+      "expected_retrieval_backend": "lexical_bm25",
+      "expected_synthesis_backend": "deterministic",
+      "allow_empty_retrieval": true,
+      "timeout_seconds": 60,
+      "destructive": false,
+      "notes": "Runner asserts no fake grounding when retrieval is empty."
+    },
+    {
+      "id": "unsupported_replay_fault",
+      "title": "Unsupported fault replay request",
+      "purpose": "Ensure unsupported replay-fault requests do not get healthy baseline KPIs presented as the requested fault.",
+      "category": "negative",
+      "gateway_request": {
+        "query": "Simulate handover_failure replay mode and return fault KPIs with citations.",
+        "thread_id": "demo-unsupported-fault",
+        "stream": false
+      },
+      "expected_services": ["gateway", "agent", "simulation"],
+      "expected_http_status": 502,
+      "required_response_fields": ["detail"],
+      "forbidden_claims": [
+        "healthy baseline metrics for requested fault",
+        "live Simu5G executed",
+        "LLM produced the response"
+      ],
+      "expected_provenance": {
+        "simulation_live": false
+      },
+      "expected_source_types": [],
+      "expected_simulation_mode": "replay",
+      "expected_rag_profile": "quickstart",
+      "expected_retrieval_backend": "lexical_bm25",
+      "expected_synthesis_backend": "deterministic",
+      "allow_empty_retrieval": true,
+      "timeout_seconds": 60,
+      "destructive": false,
+      "notes": "Expected failure preserves honesty for unsupported replay scenarios."
+    },
+    {
+      "id": "malformed_request",
+      "title": "Malformed request validation",
+      "purpose": "Verify Gateway request validation returns meaningful 4xx for malformed payloads.",
+      "category": "negative",
+      "gateway_request": {
+        "thread_id": "demo-malformed",
+        "stream": false
+      },
+      "expected_services": ["gateway"],
+      "expected_http_status": 422,
+      "required_response_fields": ["detail"],
+      "forbidden_claims": [
+        "fake success",
+        "LLM produced the response"
+      ],
+      "expected_provenance": {},
+      "expected_source_types": [],
+      "expected_simulation_mode": "replay",
+      "expected_rag_profile": "quickstart",
+      "expected_retrieval_backend": "lexical_bm25",
+      "expected_synthesis_backend": "deterministic",
+      "allow_empty_retrieval": true,
+      "timeout_seconds": 20,
+      "destructive": false,
+      "notes": "Validation scenario; stack health is still checked before execution."
+    },
+    {
+      "id": "deterministic_repeatability",
+      "title": "Deterministic structural repeatability",
+      "purpose": "Run a supported request twice and verify stable structural metadata, provenance, backends, and citation/source identities.",
+      "category": "repeatability",
+      "gateway_request": {
+        "query": "Run baseline replay and summarize likely handover causes with citations.",
+        "thread_id": "demo-repeatability",
+        "stream": false
+      },
+      "expected_services": ["gateway", "agent", "simulation", "rag", "synthesis"],
+      "expected_http_status": 200,
+      "required_response_fields": ["status", "simulation", "rag", "synthesis", "evidence"],
+      "forbidden_claims": [
+        "live Simu5G executed",
+        "semantic retrieval used",
+        "LLM produced the response"
+      ],
+      "expected_provenance": {
+        "simulation_live": false,
+        "fixture_id": "phase_bootstrap_normal",
+        "mode_label": "recorded_replay"
+      },
+      "expected_source_types": ["runbook", "spec", "scenario"],
+      "allowlisted_chunk_ids": [
+        "qs-handover-failure-runbook-handover-failure-01",
+        "qs-3gpp-ts-28-552-5g-performance-measurements-handover-performance-measurements-01"
+      ],
+      "expected_simulation_mode": "replay",
+      "expected_rag_profile": "quickstart",
+      "expected_retrieval_backend": "lexical_bm25",
+      "expected_synthesis_backend": "deterministic",
+      "allow_empty_retrieval": false,
+      "repeat": 2,
+      "timeout_seconds": 60,
+      "destructive": false,
+      "notes": "Compares structural metadata and citation IDs across repeats; no exact prose assertion."
+    }
+  ]
+}

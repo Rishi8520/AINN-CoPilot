@@ -53,6 +53,15 @@ class FakeAsyncClient:
         return FakeResponse({})
 
 
+class CaptureSimulationPayloadClient(FakeAsyncClient):
+    last_simulation_payload = None
+
+    async def post(self, url, json):
+        if url.endswith("/simulate"):
+            CaptureSimulationPayloadClient.last_simulation_payload = json
+        return await super().post(url, json)
+
+
 def _reload_agent_service(monkeypatch):
     for name in ["agent_service", "agent"]:
         sys.modules.pop(name, None)
@@ -93,6 +102,36 @@ def test_agent_canonical_request_reaches_mocked_simulation_and_rag(monkeypatch):
     assert body["evidence"]["simulation_mode"] == "replay"
     assert body["evidence"]["synthesis_backend"] == "deterministic"
     assert body["evidence"]["llm_used"] is False
+
+
+def test_agent_request_id_is_preserved_in_response(monkeypatch):
+    service = _reload_agent_service(monkeypatch)
+    monkeypatch.setattr(service.httpx, "AsyncClient", FakeAsyncClient)
+
+    request = service.ChatCompletionRequest(
+        messages="Diagnose handover failure",
+        thread_id="t1",
+        request_id="gw-12345",
+        stream=False,
+    )
+    body = asyncio.run(service.chat_completions(request))
+
+    assert body["request_id"] == "gw-12345"
+    assert body["evidence"]["request_id"] == "gw-12345"
+
+
+def test_agent_explicit_fault_simulation_request_uses_fault_scenario(monkeypatch):
+    service = _reload_agent_service(monkeypatch)
+    monkeypatch.setattr(service.httpx, "AsyncClient", CaptureSimulationPayloadClient)
+
+    request = service.ChatCompletionRequest(
+        messages="Simulate handover_failure replay mode and provide fault KPIs.",
+        thread_id="t1",
+        stream=False,
+    )
+    asyncio.run(service.chat_completions(request))
+
+    assert CaptureSimulationPayloadClient.last_simulation_payload["scenario"] == "handover_failure"
 
 
 def test_agent_downstream_rag_failure_returns_non_success(monkeypatch):
@@ -153,6 +192,15 @@ def test_agent_defaults_do_not_claim_tailscale_live_or_llm(monkeypatch):
     assert service.RAG_BASE_URL == "http://rag:7001"
 
 
+def test_intent_classifier_does_not_treat_mapping_as_health_check(monkeypatch):
+    service = _reload_agent_service(monkeypatch)
+    intent = service.classify_intent(
+        "Map likely causes for handover-failure symptoms using scenario-mapping evidence and cite sources."
+    )
+
+    assert intent != service.IntentType.HEALTH_CHECK
+
+
 def test_gateway_health_endpoint_uses_configured_agent(monkeypatch):
     gateway = _reload_gateway(monkeypatch)
 
@@ -193,6 +241,15 @@ def test_gateway_malformed_agent_response_handling(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         asyncio.run(gateway.chat(gateway.QueryRequest(query="handover", stream=False)))
     assert exc.value.status_code == 502
+
+
+def test_gateway_includes_gateway_request_id_on_nonstream_response(monkeypatch):
+    gateway = _reload_gateway(monkeypatch)
+    monkeypatch.setattr(gateway.httpx, "AsyncClient", FakeAsyncClient)
+
+    body = asyncio.run(gateway.chat(gateway.QueryRequest(query="handover", stream=False)))
+
+    assert body["gateway_request_id"].startswith("gw-")
 
 
 def test_gateway_timeout_handling(monkeypatch):

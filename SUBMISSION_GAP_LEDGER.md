@@ -1,5 +1,15 @@
 # Submission Gap Ledger
 
+## Batch 9 Update - Meaningful End-to-End Demo Scenarios
+
+- Added tracked scenario definitions at `demo/quickstart_scenarios.json` with grounded, malformed, no-match, unsupported-fault, repeatability, and dependency-failure workflows.
+- Added `scripts/run_demo_scenarios.py` to execute real Gateway end-to-end scenarios with structural assertions for replay provenance, lexical retrieval metadata, deterministic synthesis metadata, and grounded citations.
+- Added optional failure-injection mode (`--with-failure-injection`) that stops/restores only root Compose `rag` and `simulation` services and verifies post-recovery behavior.
+- Added offline unit tests `tests/test_demo_scenario_contracts.py` and `tests/test_demo_runner.py`, and integrated them into the root matrix suite.
+- Added optional wrapper flags `-WithE2E` and `--with-e2e` that require an already healthy running stack and do not auto-start services.
+- Added `DOCs/DEMO_SCENARIOS.md` plus Batch 9 updates in deployment/testing/service docs.
+- Added hygiene checks for Batch 9 demo artifacts and `e2e-results/` ignore/untracked enforcement.
+
 ## Batch 8 Update - Root Test Matrix
 
 - Added `tests/test_matrix.json`, `scripts/run_test_matrix.py`, `test.ps1`, and `test.sh` for isolated offline/static test execution with JUnit, logs, and JSON/text summaries under ignored `test-results/`.

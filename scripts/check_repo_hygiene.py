@@ -90,7 +90,12 @@ ROOT_DOCKERFILE_TEST = Path("Dockerfile.test")
 ROOT_COMPOSE_TEST = Path("docker-compose.test.yml")
 ROOT_REQUIREMENTS_TEST = Path("requirements.test.txt")
 ROOT_TEST_RESULTS = Path("test-results")
+ROOT_E2E_RESULTS = Path("e2e-results")
+DEMO_SCENARIOS_JSON = Path("demo/quickstart_scenarios.json")
+DEMO_RUNNER_SCRIPT = Path("scripts/run_demo_scenarios.py")
+DEMO_SCENARIOS_DOC = Path("DOCs/DEMO_SCENARIOS.md")
 CREDENTIAL_BEARING_URL = re.compile(r"https?://[^/\s:@]+:[^@\s/]+@")
+ABS_LOCAL_PATH_PATTERN = re.compile(r"[A-Za-z]:\\|/Users/|/home/")
 TRACKED_CACHE_PATTERNS = [
     "*/__pycache__/*",
     "__pycache__/*",
@@ -832,6 +837,50 @@ def main() -> int:
         print_limited("root deployment findings", root_deployment_findings)
     else:
         emit("PASS", "root quickstart deployment files and safe defaults validate", counts)
+
+    demo_findings = []
+    for rel_path in [DEMO_SCENARIOS_JSON, DEMO_RUNNER_SCRIPT, DEMO_SCENARIOS_DOC]:
+        if not (ROOT / rel_path).exists():
+            demo_findings.append(f"missing required demo asset: {rel_path.as_posix()}")
+
+    if (ROOT / DEMO_SCENARIOS_JSON).exists():
+        try:
+            scenario_payload = json.loads((ROOT / DEMO_SCENARIOS_JSON).read_text(encoding="utf-8"))
+            scenarios = scenario_payload.get("scenarios", [])
+        except (OSError, json.JSONDecodeError) as exc:
+            demo_findings.append(f"demo scenario file is not valid JSON: {exc}")
+            scenarios = []
+        if not scenarios:
+            demo_findings.append("demo scenarios list is empty")
+        for scenario in scenarios:
+            sid = scenario.get("id", "<unknown>")
+            if "destructive" not in scenario or not isinstance(scenario.get("destructive"), bool):
+                demo_findings.append(f"{sid}: destructive flag must be explicitly boolean")
+            text = json.dumps(scenario, sort_keys=True)
+            if ABS_LOCAL_PATH_PATTERN.search(text):
+                demo_findings.append(f"{sid}: absolute local path detected in scenario")
+            if CREDENTIAL_BEARING_URL.search(text):
+                demo_findings.append(f"{sid}: credential-bearing URL detected in scenario")
+            if re.search(r"https?://(?!localhost|127\.0\.0\.1|host\.docker\.internal|\[::1\])", text):
+                demo_findings.append(f"{sid}: external URL target detected in scenario")
+            lowered = text.lower()
+            if "expected_prose" in lowered or "exact answer" in lowered:
+                demo_findings.append(f"{sid}: exact prose assertions are forbidden")
+            if re.search(r"live\s+simu5g\s*=\s*true|semantic\s*vector|gpu_required|llm_required\s*=\s*true", lowered):
+                demo_findings.append(f"{sid}: scenario appears to require forbidden runtime capability")
+
+    tracked_e2e_results = [path for path in tracked if path.startswith("e2e-results/")]
+    if tracked_e2e_results:
+        demo_findings.append(f"e2e-results artifacts are tracked: {len(tracked_e2e_results)}")
+    gitignore_text = (ROOT / ".gitignore").read_text(encoding="utf-8", errors="replace") if (ROOT / ".gitignore").exists() else ""
+    if "e2e-results/" not in gitignore_text:
+        demo_findings.append(".gitignore does not ignore e2e-results/")
+
+    if demo_findings:
+        emit("FAIL", f"Batch 9 demo scenario hygiene failures: {len(demo_findings)}", counts)
+        print_limited("demo scenario findings", demo_findings)
+    else:
+        emit("PASS", "Batch 9 demo scenario assets and safety constraints validate", counts)
 
     contract_path = ROOT / SERVICE_CONTRACT
     if contract_path.exists():

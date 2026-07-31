@@ -1,5 +1,6 @@
 import os
 import time
+import uuid
 from typing import Any
 
 import httpx
@@ -31,6 +32,7 @@ class ChatCompletionRequest(BaseModel):
     messages: Any
     thread_id: str | None = None
     stream: bool = False
+    request_id: str | None = None
 
 
 def _message_text(messages: Any) -> str:
@@ -45,6 +47,26 @@ def _message_text(messages: Any) -> str:
                     parts.append(content)
         return "\n".join(parts).strip()
     return str(messages or "").strip()
+
+
+def _select_simulation_request(query: str) -> dict[str, Any]:
+    lowered = query.lower()
+    scenario = "baseline"
+    # Only use non-baseline scenarios when the caller explicitly asks to simulate them.
+    if "simulate" in lowered or "replay" in lowered or "scenario" in lowered:
+        if "handover_failure" in lowered or "handover stress" in lowered:
+            scenario = "handover_failure"
+        elif "energy_optimization" in lowered or "energy optimization" in lowered:
+            scenario = "energy_optimization"
+        elif "high_load" in lowered or "interference_high" in lowered or "hotspot_traffic_burst" in lowered:
+            scenario = "hotspot_traffic_burst"
+    return {
+        "scenario": scenario,
+        "ue_count": 20,
+        "cell_id": "cell-1",
+        "slice_type": "eMBB",
+        "mode": "replay",
+    }
 
 
 async def _get_json(client: httpx.AsyncClient, base_url: str, path: str) -> dict[str, Any]:
@@ -131,6 +153,7 @@ async def chat_completions(req: ChatCompletionRequest):
         raise HTTPException(status_code=400, detail="messages/query content is required")
 
     intent = classify_intent(query)
+    request_id = req.request_id or f"agent-{uuid.uuid4()}"
     timeout = httpx.Timeout(REQUEST_TIMEOUT_SECONDS)
     async with httpx.AsyncClient(timeout=timeout) as client:
         try:
@@ -138,13 +161,7 @@ async def chat_completions(req: ChatCompletionRequest):
                 client,
                 SIMULATION_BASE_URL,
                 "/simulate",
-                {
-                    "scenario": "baseline",
-                    "ue_count": 20,
-                    "cell_id": "cell-1",
-                    "slice_type": "eMBB",
-                    "mode": "replay",
-                },
+                _select_simulation_request(query),
             )
             retrieval = await _post_json(
                 client,
@@ -185,6 +202,7 @@ async def chat_completions(req: ChatCompletionRequest):
     status = "completed" if simulation.get("status") == "completed" and retrieval.get("result_count", 0) > 0 else "degraded"
     return {
         "id": f"telcomind-quickstart-{req.thread_id or 'thread'}",
+        "request_id": request_id,
         "object": "chat.completion",
         "agent_profile": "quickstart",
         "status": status,
@@ -197,6 +215,7 @@ async def chat_completions(req: ChatCompletionRequest):
         "evidence": {
             "simulation_reached": True,
             "rag_reached": True,
+            "request_id": request_id,
             "simulation_mode": simulation.get("mode"),
             "rag_profile": retrieval.get("rag_profile"),
             "retrieval_backend": retrieval.get("retrieval_backend"),

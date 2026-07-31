@@ -9,7 +9,9 @@
       "args": [
         "tests/test_service_contracts.py",
         "tests/test_root_deployment_contracts.py",
-        "tests/test_matrix_contracts.py"
+        "tests/test_matrix_contracts.py",
+        "tests/test_demo_scenario_contracts.py",
+        "tests/test_demo_runner.py"
       ],
       "pythonpath": [],
       "category": "contract",

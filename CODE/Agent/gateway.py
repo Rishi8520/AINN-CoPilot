@@ -87,6 +87,7 @@ async def agent_status():
 @app.post("/v1/chat")
 async def chat(req: QueryRequest):
     thread_id = req.thread_id or str(uuid.uuid4())
+    gateway_request_id = f"gw-{uuid.uuid4()}"
 
     # Short-circuit: health-check intent never hits the LLM
     intent = classify_intent(req.query)
@@ -108,6 +109,7 @@ async def chat(req: QueryRequest):
         "messages": req.query,
         "thread_id": thread_id,
         "stream": req.stream,
+        "request_id": gateway_request_id,
     }
 
     if req.stream:
@@ -116,11 +118,12 @@ async def chat(req: QueryRequest):
             media_type="text/event-stream",
             headers={
                 "X-Thread-ID": thread_id,
+                "X-Request-ID": gateway_request_id,
                 "X-Intent": intent.value,
             },
         )
     else:
-        return await _blocking_call(payload)
+        return await _blocking_call(payload, gateway_request_id=gateway_request_id, thread_id=thread_id)
 
 # ── Streaming helper ──────────────────────────────────────────────────────────
 async def _stream_from_agent(payload: dict):
@@ -143,7 +146,7 @@ async def _stream_from_agent(payload: dict):
         yield f"data: {err}\n\n"
 
 # ── Non-streaming helper ──────────────────────────────────────────────────────
-async def _blocking_call(payload: dict) -> dict:
+async def _blocking_call(payload: dict, gateway_request_id: str, thread_id: str) -> dict:
     payload["stream"] = False
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
@@ -155,6 +158,8 @@ async def _blocking_call(payload: dict) -> dict:
             body = r.json()
             if not isinstance(body, dict):
                 raise ValueError("Agent returned non-object JSON")
+            body.setdefault("gateway_request_id", gateway_request_id)
+            body.setdefault("thread_id", thread_id)
             return body
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=e.response.status_code, detail=str(e))
