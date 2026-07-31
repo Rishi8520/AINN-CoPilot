@@ -8,7 +8,7 @@ Batch 3 establishes a single-node service contract for AINN-CoPilot / TelcoMind.
 | --- | ---: | ---: | --- | --- | --- |
 | Simulation API | 7000 | 7000 | `http://localhost:7000` | `http://simulation:7000` | `/health` liveness, `/ready` readiness |
 | RAG API | 7001 | 7001 | `http://localhost:7001` | `http://rag:7001` | `/health` liveness, `/ready` readiness |
-| vLLM/OpenAI API | 8080 | 8000 | `http://localhost:8080` | `http://vllm:8080` | image-dependent `/health` |
+| Optional OpenAI-compatible/vLLM API | 8080 | 8000 | `http://localhost:8080` | `http://vllm:8080` | image-dependent `/health` |
 | Gateway API | 8888 | 8888 | `http://localhost:8888` | `http://gateway:8888` | `/v1/health`, `/health` |
 | Agent API | 9090 | 9090 | `http://localhost:9090` | `http://agent:9090` | `/v1/health_check` |
 | UI/Streamlit | 8501 | 8501 | `http://localhost:8501` | `http://ui:8501` | `/healthz` |
@@ -21,7 +21,7 @@ Batch 3 establishes a single-node service contract for AINN-CoPilot / TelcoMind.
 | --- | --- | --- | --- |
 | `SIMULATION_BASE_URL` | Simulation API base URL | `http://simulation:7000` | `http://localhost:7000` |
 | `RAG_BASE_URL` | RAG API base URL | `http://rag:7001` | `http://localhost:7001` |
-| `VLLM_BASE_URL` | OpenAI-compatible vLLM base URL | `http://vllm:8080` | `http://localhost:8080` |
+| `LLM_BASE_URL` | Optional OpenAI-compatible synthesis base URL | empty by default | `http://localhost:8080` only when explicitly enabled |
 | `GATEWAY_BASE_URL` | Gateway API base URL | `http://gateway:8888` | `http://localhost:8888` |
 | `AGENT_BASE_URL` | Agent API base URL | `http://agent:9090` | `http://localhost:9090` |
 | `SIMULATION_PORT` | Simulation host port | `7000` | `7000` |
@@ -41,7 +41,7 @@ Batch 3 establishes a single-node service contract for AINN-CoPilot / TelcoMind.
 | `AGENT_PORT` | Agent host port | `9090` | `9090` |
 | `UI_PORT` | Streamlit host port | `8501` | `8501` |
 
-Compatibility aliases are still read where useful: `SIM_SERVICE_URL`, `RAG_SERVICE_URL`, `LLM_ENDPOINT_URL`, `AGENT_ENDPOINT`, and `GATEWAY_URL`.
+Compatibility aliases are still read where useful: `SIM_SERVICE_URL`, `RAG_SERVICE_URL`, `VLLM_BASE_URL`, `LLM_ENDPOINT_URL`, `AGENT_ENDPOINT`, and `GATEWAY_URL`.
 For each alias pair, precedence is canonical variable, then legacy alias, then safe default. Empty or whitespace-only values are ignored and trailing slashes are normalized.
 
 ## Simulation API
@@ -156,30 +156,32 @@ Canonical synthesis endpoint: `POST /synthesize`
 }
 ```
 
-Synthesis returns `answer`, `confidence`, structured `citations`, `assumptions`, `recommended_action`, `used_simulation_kpis`, `intent_type`, `retrieval_context_count`, `synthesis_backend`, `llm_used`, `fallback_used`, and `warnings`. If vLLM is disabled or unavailable, deterministic fallback is reported and is not labelled as vLLM output.
+Synthesis returns `answer`, `confidence`, structured `citations`, `assumptions`, `recommended_action`, `used_simulation_kpis`, `intent_type`, `retrieval_context_count`, `requested_backend`, `synthesis_backend`, `llm_used`, `fallback_used`, `attempted_provider`, `configured_provider`, `configured_model`, `response_model`, `fallback_reason`, `error_category`, `citation_validation`, `unknown_citation_ids`, and `warnings`.
+
+`RAG_SYNTHESIS_BACKEND=deterministic` is the default and performs no HTTP request. `RAG_SYNTHESIS_BACKEND=openai_compatible` calls only the configured `LLM_BASE_URL` endpoint. Optional LLM failures fall back to deterministic synthesis only when `LLM_REQUIRED=false` and `LLM_FALLBACK_TO_DETERMINISTIC=true`. Required or fallback-disabled failures return structured `503` failure details and do not label deterministic text as LLM output.
 
 RAG health paths:
 
 - `GET /health`: process liveness only. It reports the configured profile/backend but does not claim semantic index readiness.
-- `GET /ready`: returns `200` when the configured profile is ready and `503` when unavailable. Quickstart readiness validates corpus and provenance. Full readiness checks dependencies and a usable non-empty collection without silently creating a successful quickstart response.
-- `GET /capabilities`: reports supported profiles/backends, active profile, deterministic synthesis availability, and whether vLLM is configured, without exposing secrets or absolute local paths.
+- `GET /ready`: returns `200` when the configured profile and synthesis policy are ready and `503` when unavailable. Quickstart readiness validates corpus and provenance. Full readiness checks dependencies and a usable non-empty collection without silently creating a successful quickstart response. Optional OpenAI-compatible synthesis with missing LLM config may be degraded-ready only when deterministic fallback is allowed.
+- `GET /capabilities`: reports supported profiles/backends, active profile, supported synthesis backends, configured synthesis backend, deterministic synthesis availability, optional OpenAI-compatible configuration status, required/fallback policy, and `endpoint_reachability=not_checked`, without exposing secrets or absolute local paths.
 
-## vLLM API
+## Optional OpenAI-Compatible API
 
 Canonical endpoint: `POST /v1/chat/completions`
 
 ```json
 {
-  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "model": "configured-model",
   "messages": [
     {"role": "user", "content": "Explain handover failure."}
   ],
-  "temperature": 0.1,
-  "max_tokens": 400
+  "temperature": 0,
+  "max_tokens": 512
 }
 ```
 
-Local vLLM does not require a real API key unless an image or wrapper is configured to require one. GPU startup and model download are not part of Batch 3 validation.
+Local compatible endpoints do not require a real API key unless the endpoint wrapper requires one. vLLM is an optional implementation of this interface on port `8080`; it is not part of default startup. GPU startup, model download, and vLLM runtime are not part of Batch 6 validation.
 
 ## Gateway And Agent
 

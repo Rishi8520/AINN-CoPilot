@@ -16,6 +16,21 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _float_env(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, default))
+    except ValueError:
+        return default
+
+
+def _bounded_int_env(name: str, default: int, minimum: int, maximum: int) -> int:
+    return max(minimum, min(_int_env(name, default), maximum))
+
+
+def _bounded_float_env(name: str, default: float, minimum: float, maximum: float) -> float:
+    return max(minimum, min(_float_env(name, default), maximum))
+
+
 RAG_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -46,10 +61,30 @@ def _profile_env() -> str:
     return value
 
 
-def _base_url_env(primary: str, legacy: str = "", default: str = "") -> str:
-    value = os.getenv(primary) or (os.getenv(legacy) if legacy else "") or default
-    value = value.strip().rstrip("/")
-    return value or default
+def _first_str_env(names: list[str], default: str = "") -> str:
+    for name in names:
+        value = os.getenv(name)
+        if value is not None and value.strip():
+            return value.strip()
+    return default
+
+
+def _base_url_env(primary: str, legacy: list[str] | None = None, default: str = "") -> str:
+    value = _first_str_env([primary, *(legacy or [])], default)
+    return value.rstrip("/") if value else default
+
+
+def _synthesis_backend_env() -> str:
+    raw = os.getenv("RAG_SYNTHESIS_BACKEND")
+    if raw is None and _bool_env("LLM_ENABLED", False):
+        value = "openai_compatible"
+    else:
+        value = (raw or "").strip().lower()
+    if not value:
+        return "deterministic"
+    if value not in {"deterministic", "openai_compatible"}:
+        raise ValueError("RAG_SYNTHESIS_BACKEND must be one of: deterministic, openai_compatible")
+    return value
 
 
 RAG_PROFILE = _profile_env()
@@ -78,7 +113,20 @@ TOP_K = _int_env("TOP_K", 8)
 RERANK_TOP_K = _int_env("RERANK_TOP_K", 4)
 RAG_DEVICE = os.getenv("RAG_DEVICE", "auto")
 CHROMA_UPSERT_BATCH_SIZE = _int_env("CHROMA_UPSERT_BATCH_SIZE", 1000)
-LLM_ENABLED = _bool_env("LLM_ENABLED", False)
-LLM_ENDPOINT_URL = _base_url_env("VLLM_BASE_URL", "LLM_ENDPOINT_URL", "")
-LLM_MODEL = os.getenv("LLM_MODEL", "Qwen/Qwen2.5-0.5B-Instruct")
-LLM_TIMEOUT_SECONDS = _int_env("LLM_TIMEOUT_SECONDS", 30)
+RAG_SYNTHESIS_BACKEND = _synthesis_backend_env()
+LLM_PROVIDER = _str_env("LLM_PROVIDER", default="openai_compatible").lower()
+LLM_BASE_URL = _base_url_env("LLM_BASE_URL", ["VLLM_BASE_URL", "LLM_ENDPOINT_URL"], "")
+LLM_ENDPOINT_URL = LLM_BASE_URL
+LLM_MODEL = _str_env("LLM_MODEL", default="")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "").strip()
+LLM_REQUIRED = _bool_env("LLM_REQUIRED", False)
+LLM_FALLBACK_TO_DETERMINISTIC = False if LLM_REQUIRED else _bool_env(
+    "LLM_FALLBACK_TO_DETERMINISTIC",
+    True,
+)
+LLM_CONNECT_TIMEOUT_SECONDS = _bounded_float_env("LLM_CONNECT_TIMEOUT_SECONDS", 3.0, 0.1, 60.0)
+LLM_READ_TIMEOUT_SECONDS = _bounded_float_env("LLM_READ_TIMEOUT_SECONDS", 30.0, 1.0, 300.0)
+LLM_MAX_TOKENS = _bounded_int_env("LLM_MAX_TOKENS", 512, 1, 4096)
+LLM_TEMPERATURE = _bounded_float_env("LLM_TEMPERATURE", 0.0, 0.0, 2.0)
+LLM_TIMEOUT_SECONDS = int(LLM_READ_TIMEOUT_SECONDS)
+LLM_ENABLED = RAG_SYNTHESIS_BACKEND == "openai_compatible"

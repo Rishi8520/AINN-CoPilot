@@ -73,7 +73,7 @@ def test_env_examples_have_valid_canonical_urls_and_ports():
     expected_urls = {
         "SIMULATION_BASE_URL": "http://simulation:7000",
         "RAG_BASE_URL": "http://rag:7001",
-        "VLLM_BASE_URL": "http://vllm:8080",
+        "LLM_BASE_URL": "",
         "GATEWAY_BASE_URL": "http://gateway:8888",
         "AGENT_BASE_URL": "http://agent:9090",
     }
@@ -83,11 +83,15 @@ def test_env_examples_have_valid_canonical_urls_and_ports():
         for key, expected in expected_ports.items():
             assert values[key] == expected
         for key, expected in expected_urls.items():
-            parsed = urlparse(values[key])
             assert values[key] == expected
-            assert parsed.scheme == "http"
-            assert parsed.hostname
-            assert parsed.port
+            if expected:
+                parsed = urlparse(values[key])
+                assert parsed.scheme == "http"
+                assert parsed.hostname
+                assert parsed.port
+        assert values["VLLM_BASE_URL"] == ""
+        assert values["RAG_SYNTHESIS_BACKEND"] == "deterministic"
+        assert values["LLM_REQUIRED"] == "false"
 
 
 def test_active_config_has_no_tailscale_or_100x_default():

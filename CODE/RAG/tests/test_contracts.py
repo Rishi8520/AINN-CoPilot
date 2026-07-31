@@ -149,26 +149,29 @@ def test_external_embedding_and_reranker_config_can_be_parsed(monkeypatch):
     importlib.reload(config)
 
 
-def test_vllm_base_url_is_canonical_llm_endpoint(monkeypatch):
+def test_llm_base_url_is_canonical_llm_endpoint(monkeypatch):
     with monkeypatch.context() as env:
-        env.setenv("VLLM_BASE_URL", " http://vllm:8080/ ")
+        env.setenv("LLM_BASE_URL", " http://llm:8080/ ")
+        env.setenv("VLLM_BASE_URL", "http://vllm:8080")
         env.setenv("LLM_ENDPOINT_URL", "http://legacy-llm:8080")
 
         reloaded = importlib.reload(config)
 
-        assert reloaded.LLM_ENDPOINT_URL == "http://vllm:8080"
+        assert reloaded.LLM_BASE_URL == "http://llm:8080"
+        assert reloaded.LLM_ENDPOINT_URL == "http://llm:8080"
 
     importlib.reload(config)
 
 
 def test_vllm_legacy_alias_used_only_when_canonical_absent(monkeypatch):
     with monkeypatch.context() as env:
-        env.delenv("VLLM_BASE_URL", raising=False)
+        env.delenv("LLM_BASE_URL", raising=False)
+        env.setenv("VLLM_BASE_URL", " http://vllm:8080/ ")
         env.setenv("LLM_ENDPOINT_URL", " http://legacy-llm:8080/ ")
 
         reloaded = importlib.reload(config)
 
-        assert reloaded.LLM_ENDPOINT_URL == "http://legacy-llm:8080"
+        assert reloaded.LLM_BASE_URL == "http://vllm:8080"
 
     importlib.reload(config)
 
@@ -307,11 +310,11 @@ def test_synthesis_response_includes_intent_type_and_retrieval_context_count():
 
 def test_synthesis_default_llm_disabled_uses_deterministic_path(monkeypatch):
     def fail_if_called(*args, **kwargs):
-        raise AssertionError("LLM endpoint should not be called when disabled.")
+        raise AssertionError("LLM client should not be instantiated in deterministic mode.")
 
-    monkeypatch.setattr(config, "LLM_ENABLED", False)
-    monkeypatch.setattr(config, "LLM_ENDPOINT_URL", "http://llm.example")
-    monkeypatch.setattr(synthesis.urllib.request, "urlopen", fail_if_called)
+    monkeypatch.setattr(config, "RAG_SYNTHESIS_BACKEND", "deterministic")
+    monkeypatch.setattr(config, "LLM_BASE_URL", "http://llm.example")
+    monkeypatch.setattr(synthesis, "OpenAICompatibleClient", fail_if_called)
 
     response = synthesis.synthesize_response(
         query="Why might handover failures occur?",
@@ -320,6 +323,7 @@ def test_synthesis_default_llm_disabled_uses_deterministic_path(monkeypatch):
 
     assert response.answer.startswith("Based on the retrieved context")
     assert response.citations[0].title == "Handover Failure Runbook"
+    assert response.requested_backend == "deterministic"
     assert response.synthesis_backend == "deterministic"
     assert response.llm_used is False
 
@@ -327,30 +331,30 @@ def test_synthesis_default_llm_disabled_uses_deterministic_path(monkeypatch):
 def test_synthesis_llm_success_replaces_answer_and_preserves_contract(monkeypatch):
     captured = {}
 
-    def fake_urlopen(request, timeout):
-        captured["url"] = request.full_url
-        captured["timeout"] = timeout
-        captured["payload"] = json.loads(request.data.decode("utf-8"))
-        return FakeLLMResponse(
-            {
-                "choices": [
-                    {
-                        "message": {
-                            "content": (
-                                "Handover failures may occur when radio conditions are weak or "
-                                "neighbor relations are missing [1]."
-                            )
-                        }
-                    }
-                ]
-            }
-        )
+    class FakeClient:
+        def __init__(self, client_config):
+            captured["config"] = client_config
 
-    monkeypatch.setattr(config, "LLM_ENABLED", True)
-    monkeypatch.setattr(config, "LLM_ENDPOINT_URL", "http://llm.example")
+        def complete(self, messages):
+            captured["messages"] = messages
+            return type(
+                "Completion",
+                (),
+                {
+                    "content": (
+                        "Handover failures may occur when radio conditions are weak or "
+                        "neighbor relations are missing [C1]."
+                    ),
+                    "response_model": "served-model",
+                },
+            )()
+
+    monkeypatch.setattr(config, "RAG_SYNTHESIS_BACKEND", "openai_compatible")
+    monkeypatch.setattr(config, "LLM_BASE_URL", "http://llm.example")
+    monkeypatch.setattr(config, "LLM_PROVIDER", "openai_compatible")
     monkeypatch.setattr(config, "LLM_MODEL", "Qwen/Qwen2.5-0.5B-Instruct")
-    monkeypatch.setattr(config, "LLM_TIMEOUT_SECONDS", 7)
-    monkeypatch.setattr(synthesis.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(config, "LLM_READ_TIMEOUT_SECONDS", 7)
+    monkeypatch.setattr(synthesis, "OpenAICompatibleClient", FakeClient)
 
     response = synthesis.synthesize_response(
         query="Why might handover failures occur?",
@@ -360,30 +364,34 @@ def test_synthesis_llm_success_replaces_answer_and_preserves_contract(monkeypatc
     )
 
     assert response.answer == (
-        "Handover failures may occur when radio conditions are weak or neighbor relations are missing [1]."
+        "Handover failures may occur when radio conditions are weak or neighbor relations are missing [C1]."
     )
     assert response.citations[0].title == "Handover Failure Runbook"
     assert response.used_simulation_kpis == {"handover_success_rate": 0.72}
     assert response.intent_type == "DIAGNOSTIC"
     assert response.retrieval_context_count == 1
-    assert response.synthesis_backend == "vllm"
+    assert response.requested_backend == "openai_compatible"
+    assert response.synthesis_backend == "openai_compatible"
     assert response.llm_used is True
-    assert captured["url"] == "http://llm.example/v1/chat/completions"
-    assert captured["timeout"] == 7
-    assert captured["payload"]["model"] == "Qwen/Qwen2.5-0.5B-Instruct"
-    assert "[1]" in captured["payload"]["messages"][1]["content"]
-    assert "do not invent 3gpp or o-ran clause numbers" in captured["payload"]["messages"][0][
-        "content"
-    ].lower()
+    assert response.response_model == "served-model"
+    assert captured["config"].model == "Qwen/Qwen2.5-0.5B-Instruct"
+    assert "[C1]" in captured["messages"][1]["content"]
+    assert "do not invent standards clauses" in captured["messages"][0]["content"].lower()
 
 
 def test_synthesis_llm_failure_falls_back_deterministically(monkeypatch):
-    def fake_urlopen(request, timeout):
-        raise TimeoutError("vLLM timed out")
+    class FailingClient:
+        def __init__(self, client_config):
+            pass
 
-    monkeypatch.setattr(config, "LLM_ENABLED", True)
-    monkeypatch.setattr(config, "LLM_ENDPOINT_URL", "http://llm.example")
-    monkeypatch.setattr(synthesis.urllib.request, "urlopen", fake_urlopen)
+        def complete(self, messages):
+            raise synthesis.LLMClientError("read_timeout", "LLM response timed out")
+
+    monkeypatch.setattr(config, "RAG_SYNTHESIS_BACKEND", "openai_compatible")
+    monkeypatch.setattr(config, "LLM_BASE_URL", "http://llm.example")
+    monkeypatch.setattr(config, "LLM_MODEL", "demo-model")
+    monkeypatch.setattr(config, "LLM_FALLBACK_TO_DETERMINISTIC", True)
+    monkeypatch.setattr(synthesis, "OpenAICompatibleClient", FailingClient)
 
     response = synthesis.synthesize_response(
         query="Why might handover failures occur?",
@@ -391,10 +399,10 @@ def test_synthesis_llm_failure_falls_back_deterministically(monkeypatch):
     )
 
     assert response.answer.startswith("Based on the retrieved context")
-    assert "deterministic fallback synthesis was used" in response.assumptions[-1]
     assert response.synthesis_backend == "deterministic"
     assert response.llm_used is False
     assert response.fallback_used is True
+    assert response.error_category == "read_timeout"
 
 
 def test_demo_query_json_exists_parses_and_has_required_fields():

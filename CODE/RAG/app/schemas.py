@@ -30,6 +30,7 @@ class SourceChunk(BaseModel):
 
 
 class SynthesisCitation(BaseModel):
+    citation_id: Optional[str] = None
     source: str
     title: str
     section: str
@@ -58,9 +59,18 @@ class SynthesisResponse(BaseModel):
     used_simulation_kpis: Optional[dict[str, Any]] = None
     intent_type: Optional[str] = None
     retrieval_context_count: int
+    requested_backend: str = "deterministic"
     synthesis_backend: str = "deterministic"
     llm_used: bool = False
     fallback_used: bool = False
+    attempted_provider: Optional[str] = None
+    configured_provider: Optional[str] = None
+    configured_model: Optional[str] = None
+    response_model: Optional[str] = None
+    fallback_reason: Optional[str] = None
+    error_category: Optional[str] = None
+    citation_validation: Literal["passed", "warned", "failed"] = "passed"
+    unknown_citation_ids: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 
 

@@ -17,7 +17,7 @@ This ledger does not claim compliance with the under-10-minute installation and 
 | Two-page technical report | MISSING | No root `TECHNICAL_REPORT.pdf` found. |
 | Optional demo video | NOT YET VERIFIED | No root README/report exists to link a demo video. |
 | Single-node deployment | NOT YET VERIFIED | Subproject compose files exist, but root single-node orchestration is absent. |
-| CPU/no-GPU quickstart | NOT YET VERIFIED | RAG compose includes optional vLLM configuration; CPU-only default is not proven. |
+| CPU/no-GPU quickstart | PARTIAL | Batch 5 quickstart plus Batch 6 deterministic synthesis make RAG startup and synthesis CPU-safe by default; root one-click deployment and clean-machine timing remain unverified. |
 | Under-10-minute installation and first run | NOT YET VERIFIED | No timing validation was run. |
 | End-to-end UI/Gateway/Agent/Simulation/RAG/LLM workflow | NOT YET VERIFIED | Components exist, but no end-to-end smoke test was run. |
 | Performance logs/screenshots | MISSING | No root submission evidence bundle was found. |
@@ -129,13 +129,13 @@ Knowledge-base files exist, and Batch 5 adds a committed quickstart corpus under
 
 No full ingestion was run. The default quickstart must avoid full PDF ingestion and keep full-corpus ingestion as an optional rebuild.
 
-### CPU/no-GPU fallback
+### CPU/no-GPU synthesis
 
-CPU-safe behavior is not yet proven. The default quickstart must not require GPU or vLLM.
+Batch 6 makes deterministic synthesis the RAG default. It requires no GPU, model download, external service, API key, or network call. Optional OpenAI-compatible/vLLM synthesis is explicit and truthfully labelled.
 
 ### vLLM/GPU optional mode
 
-RAG compose includes vLLM-related configuration. GPU vLLM should remain available as an optional enhanced profile, not the default requirement.
+vLLM remains an optional OpenAI-compatible implementation on port `8080`, not a default startup requirement. Batch 6 documents the development-tested NVIDIA NGC image/model path but does not pull, run, or validate it.
 
 ### Simulation quickstart versus real Simu5G mode
 
@@ -276,6 +276,29 @@ Batch 5 limitations still open:
 - No formal under-10-minute or four-core timing claim is made; that remains Batch 10.
 - Root one-click deployment remains Batch 7.
 
+## G3. Batch 6 evidence
+
+Batch 6 synthesis and optional LLM behavior:
+
+- `RAG_SYNTHESIS_BACKEND` accepts exactly `deterministic` and `openai_compatible`; empty defaults to `deterministic` and invalid values fail configuration.
+- Deterministic synthesis is the submission default and reports `requested_backend=deterministic`, `synthesis_backend=deterministic`, `llm_used=false`, and `fallback_used=false`.
+- Deterministic mode does not instantiate the LLM client and performs no HTTP request.
+- `LLM_BASE_URL` is canonical. `VLLM_BASE_URL` and `LLM_ENDPOINT_URL` are documented legacy aliases only when `LLM_BASE_URL` is absent or empty.
+- Optional OpenAI-compatible synthesis uses `/v1/chat/completions`, `temperature=0`, bounded max tokens, explicit connect/read timeouts, optional Authorization only when `LLM_API_KEY` is set, and defensive response parsing.
+- LLM success is reported only after a valid response. Optional failures fall back to deterministic synthesis only when policy permits. Required or fallback-disabled failures return structured failure metadata.
+- Deterministic fallback is never labelled as LLM output, vLLM output, or successful optional LLM generation.
+- Citation IDs are stable (`C1`, `C2`, ...), structured citation objects remain source-grounded, and unknown model citation IDs are flagged instead of remapped.
+- Prompt-injection mitigation treats retrieved text as data, delimits evidence blocks, and tests a malicious evidence chunk requesting an invented citation. This is documented as a mitigation, not a guarantee.
+- `/health` remains liveness only. `/ready` includes synthesis policy readiness/degraded status. `/capabilities` reports configured synthesis backend and optional OpenAI-compatible status without secrets or endpoint reachability claims.
+- OPEA scope is interface-level: retrievaltool-compatible RAG endpoint, OpenAI-compatible LLM interface support, and external embedding/reranker interface compatibility. No formal OPEA certification or end-to-end OPEA deployment is claimed.
+
+Batch 6 limitations still open:
+
+- Optional vLLM runtime was not pulled, started, or tested in this batch.
+- No external LLM endpoint, GPU, model download, Docker startup, full RAG ingestion, or Simu5G run was performed.
+- Root one-click deployment remains Batch 7.
+- Formal four-core timing remains Batch 10.
+
 ## H. Ordered 15-batch remediation plan
 
 | Batch | Goal | Expected files/components | Acceptance gate | Risks |
@@ -285,7 +308,7 @@ Batch 5 limitations still open:
 | 3. Canonical ports, environment, and API contracts | Completed in Batch 3: established canonical single-node ports, env variables, Simulation/RAG/vLLM/Gateway/Agent/UI contracts, and active Tailscale removal. | `.env.example`, `CODE/.env.example`, `contracts/services.json`, `DOCs/SERVICE_CONTRACTS.md`, Agent/Gateway/UI/RAG/Simulation config and contract tests, `scripts/check_repo_hygiene.py`. | Offline contract tests and hygiene checks validate unique canonical ports, configurable URLs, JSON Simulation calls, structured RAG retrieval, vLLM path construction, and no active/default Tailscale dependency. | Root one-click deployment is still deferred to Batch 7; Simulation truthful replay/live dual-mode behavior remains Batch 4. |
 | 4. Simulation dual-mode design | Completed in Batch 4: separated quickstart replay/fixture mode from live Simu5G execution. | Simulation config, fixture loader, readiness probes, API dispatch, docs/tests. | CPU-safe replay works without Simu5G; live mode reports structured unavailable/failure unless explicitly enabled and ready. | Full live Simu5G execution is still unproven on this checkout. |
 | 5. RAG quickstart/prebuilt-index strategy | Completed in Batch 5: added default offline quickstart corpus/profile while preserving explicit full semantic mode. | `CODE/RAG/quickstart`, RAG profile config, lexical retriever, readiness/capabilities, docs/tests/hygiene. | Quickstart corpus verifies offline, demo queries retrieve evidence, API metadata identifies profile/backend, full mode never silently falls back. | Full semantic rebuild, clean-machine full execution, one-click deployment, and formal timing remain later-batch risks. |
-| 6. CPU/no-GPU LLM and OPEA fallback strategy | Make default LLM path CPU-safe while keeping OPEA/GPU options. | Env profiles, fallback docs, optional vLLM profile. | Demo flow works on CPU-only single node. | Quality or latency regressions in CPU fallback. |
+| 6. CPU/no-GPU LLM and OPEA fallback strategy | Completed in Batch 6: deterministic synthesis is the default, optional OpenAI-compatible/vLLM is explicit, fallback semantics are tested, and OPEA claims are interface-scoped. | RAG config/client/policy/schema/readiness/capabilities, env examples, docs/tests/hygiene. | Offline RAG tests validate deterministic no-network synthesis, mocked OpenAI-compatible success/failure, citation validation, and readiness/capabilities semantics. | Optional vLLM runtime and end-to-end OPEA deployment remain unverified. |
 | 7. Root one-click Compose/deploy script | Add root deployment entry point. | `docker-compose.yml`, `deploy.sh`, root `.env.example`. | One documented command starts the submission stack. | Port conflicts, slow image builds, missing health checks. |
 | 8. Automated tests | Add focused unit and contract tests for critical interfaces. | Tests under component test folders and root smoke helpers. | Lightweight tests pass without Docker/model startup. | Tests becoming coupled to unavailable services. |
 | 9. End-to-end smoke test | Add single-node smoke path across UI/Gateway/Agent/RAG/Simulation/LLM. | Smoke script and expected outputs. | Smoke test validates a cited response and simulation KPI path. | Flaky startup timing and health checks. |

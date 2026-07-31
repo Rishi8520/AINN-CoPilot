@@ -11,7 +11,7 @@ from app.schemas import (
     SynthesisRequest,
     SynthesisResponse,
 )
-from app.synthesis import synthesize_response
+from app.synthesis import SynthesisFailure, synthesize_response, synthesis_readiness
 from app.vector_store import FullRAGUnavailable, TelcoVectorIngestStore, TelcoVectorStore, full_readiness
 
 app = FastAPI(
@@ -88,7 +88,15 @@ async def health():
 @app.get(READY_PATH)
 async def ready(response: Response):
     details = _quickstart_readiness() if config.RAG_PROFILE == "quickstart" else full_readiness()
+    synthesis = synthesis_readiness()
+    details["synthesis"] = synthesis
+    details["warnings"] = [*details.get("warnings", []), *synthesis.get("warnings", [])]
+    if synthesis.get("degraded") and details.get("ready"):
+        details["degraded"] = True
     if not details.get("ready"):
+        response.status_code = 503
+    if not synthesis.get("ready"):
+        details["ready"] = False
         response.status_code = 503
     return details
 
@@ -104,10 +112,22 @@ async def capabilities():
             "full": "chroma_bge_reranker",
         },
         "deterministic_synthesis": True,
-        "vllm_configured": bool(config.LLM_ENABLED and config.LLM_ENDPOINT_URL.strip()),
+        "supported_synthesis_backends": ["deterministic", "openai_compatible"],
+        "configured_synthesis_backend": config.RAG_SYNTHESIS_BACKEND,
+        "openai_compatible": {
+            "configured": bool(config.LLM_BASE_URL and config.LLM_MODEL),
+            "provider": config.LLM_PROVIDER,
+            "model_configured": bool(config.LLM_MODEL),
+            "api_key_configured": bool(config.LLM_API_KEY),
+            "llm_required": config.LLM_REQUIRED,
+            "fallback_allowed": config.LLM_FALLBACK_TO_DETERMINISTIC,
+            "endpoint_reachability": "not_checked",
+        },
+        "vllm_configured": bool(config.LLM_PROVIDER == "vllm" and config.LLM_BASE_URL and config.LLM_MODEL),
         "auto_ingest": config.RAG_AUTO_INGEST,
         "warnings": [
-            "Full semantic mode is explicit and never receives quickstart fallback."
+            "Full semantic mode is explicit and never receives quickstart fallback.",
+            "Capabilities do not claim OpenAI-compatible endpoint reachability based only on URL presence.",
         ],
     }
 
@@ -205,12 +225,15 @@ async def synthesize(req: SynthesisRequest):
         store = _get_store()
         sources = _format_context(query, store.search(query, req.top_k), store).sources
 
-    return synthesize_response(
-        query=query,
-        sources=sources,
-        simulation_kpis=req.simulation_kpis,
-        intent_type=req.intent_type,
-    )
+    try:
+        return synthesize_response(
+            query=query,
+            sources=sources,
+            simulation_kpis=req.simulation_kpis,
+            intent_type=req.intent_type,
+        )
+    except SynthesisFailure as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 @app.post(RETRIEVE_TEXT_COMPAT_PATH)

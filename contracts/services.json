@@ -26,16 +26,20 @@
       "capabilities_path": "/capabilities",
       "supported_profiles": ["quickstart", "full"],
       "default_profile": "quickstart",
+      "supported_synthesis_backends": ["deterministic", "openai_compatible"],
+      "default_synthesis_backend": "deterministic",
       "api_paths": ["/v1/retrievaltool/json", "/v1/retrievaltool", "/synthesize", "/ready", "/capabilities"]
     },
     {
       "name": "vllm",
       "host_port": 8080,
       "container_port": 8000,
-      "base_url_env": "VLLM_BASE_URL",
+      "base_url_env": "LLM_BASE_URL",
       "native_url": "http://localhost:8080",
       "docker_url": "http://vllm:8080",
       "health_path": "/health",
+      "optional_profile": "gpu-llm",
+      "default_enabled": false,
       "api_paths": ["/v1/chat/completions"]
     },
     {

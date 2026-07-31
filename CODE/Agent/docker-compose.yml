@@ -18,15 +18,16 @@ services:
       memory_type: "checkpointer"
       strategy: ${AGENT_STRATEGY:-react_llama}
       with_memory: ${WITH_MEMORY:-true}
-      llm_endpoint_url: ${VLLM_BASE_URL:-http://vllm:8080}
-      llm_engine: ${LLM_ENGINE:-vllm}
+      llm_endpoint_url: ${LLM_BASE_URL:-}
+      llm_engine: ${LLM_ENGINE:-openai_compatible}
       max_new_tokens: ${MAX_NEW_TOKENS:-256}
       recursion_limit: ${RECURSION_LIMIT:-15}
       require_human_feedback: "false"
       tools: /home/user/comps/agent/src/tools/ainn_tools.yaml
       SIMULATION_BASE_URL: ${SIMULATION_BASE_URL:-http://simulation:7000}
       RAG_BASE_URL: ${RAG_BASE_URL:-http://rag:7001}
-      VLLM_BASE_URL: ${VLLM_BASE_URL:-http://vllm:8080}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      VLLM_BASE_URL: ${VLLM_BASE_URL:-}
       SIM_SERVICE_URL: ${SIM_SERVICE_URL:-http://simulation:7000}
       RAG_SERVICE_URL: ${RAG_SERVICE_URL:-http://rag:7001}
     networks:

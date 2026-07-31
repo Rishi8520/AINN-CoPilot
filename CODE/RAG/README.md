@@ -16,7 +16,8 @@ Current status:
 - `/v1/retrievaltool/json` returns citation-ready JSON.
 - `/synthesize` returns structured synthesis with answer, confidence,
   citations, assumptions, recommended action, KPI usage, intent type, and
-  retrieval context count.
+  retrieval context count plus truthful backend, fallback, and citation
+  validation metadata.
 
 ## Local Startup
 
@@ -234,16 +235,49 @@ curl -X POST http://localhost:7001/synthesize \
   }'
 ```
 
-## Optional vLLM Synthesis
+## Synthesis Backends
 
 By default, `/synthesize` uses deterministic synthesis only. This keeps local
-RAG startup independent from any LLM service:
+RAG startup independent from any LLM service, model download, GPU, API key, or
+network:
 
 ```env
-LLM_ENABLED=false
+RAG_SYNTHESIS_BACKEND=deterministic
 ```
 
-To enable OpenAI-compatible vLLM synthesis, start vLLM separately:
+Deterministic synthesis reports `requested_backend=deterministic`,
+`synthesis_backend=deterministic`, `llm_used=false`, and
+`fallback_used=false`. It is not labelled as LLM output.
+
+To enable an OpenAI-compatible LLM endpoint explicitly:
+
+```env
+RAG_SYNTHESIS_BACKEND=openai_compatible
+LLM_BASE_URL=http://localhost:8080
+LLM_PROVIDER=openai_compatible
+LLM_MODEL=Qwen/Qwen2.5-0.5B-Instruct
+LLM_REQUIRED=false
+LLM_FALLBACK_TO_DETERMINISTIC=true
+LLM_CONNECT_TIMEOUT_SECONDS=3
+LLM_READ_TIMEOUT_SECONDS=30
+LLM_MAX_TOKENS=512
+LLM_TEMPERATURE=0
+```
+
+`LLM_BASE_URL` is canonical. `VLLM_BASE_URL` and `LLM_ENDPOINT_URL` remain
+legacy aliases only when the canonical URL is absent. The client posts to
+`<base-url>/v1/chat/completions`. If `LLM_API_KEY` is set, it is sent as an
+Authorization bearer token and is not exposed in responses or capabilities.
+
+Optional LLM failures fall back to deterministic synthesis only when fallback
+is allowed. Required or fallback-disabled LLM failures return structured
+service failure details and do not imply that any LLM-generated text exists.
+
+### Optional vLLM Reference
+
+vLLM is one optional OpenAI-compatible implementation. It is not part of the
+default quickstart and requires separate GPU/NVIDIA Container Toolkit support.
+This development-tested command is documentation only for this batch:
 
 ```powershell
 docker run --rm --name vllm-inference --gpus all --ipc=host `
@@ -267,28 +301,13 @@ Then start RAG with LLM synthesis enabled:
 
 ```bash
 cd CODE/RAG
-LLM_ENABLED=true \
-VLLM_BASE_URL=http://localhost:8080 \
+RAG_SYNTHESIS_BACKEND=openai_compatible \
+LLM_PROVIDER=vllm \
+LLM_BASE_URL=http://localhost:8080 \
 LLM_MODEL=Qwen/Qwen2.5-0.5B-Instruct \
 RAG_DEVICE=cpu \
 ../.venv/bin/uvicorn app.rag_service:app --host 0.0.0.0 --port 7001
 ```
-
-Environment variables:
-
-- `LLM_ENABLED`: defaults to `false`.
-- `VLLM_BASE_URL`: defaults to empty. When enabled, RAG posts to
-  `{VLLM_BASE_URL}/v1/chat/completions`. `LLM_ENDPOINT_URL` remains a
-  compatibility alias.
-- `LLM_MODEL`: defaults to `Qwen/Qwen2.5-0.5B-Instruct`.
-- `LLM_TIMEOUT_SECONDS`: defaults to `30`.
-
-When vLLM is enabled and returns a usable answer, `/synthesize` uses that text
-as `answer` while preserving deterministic citations, assumptions,
-recommended action, KPI fields, intent type, and retrieval context count. If
-vLLM is offline, times out, returns invalid JSON, or returns no usable answer,
-the API still succeeds with deterministic fallback synthesis and records an
-assumption noting that fallback was used.
 
 ## Agent Integration Contract
 

@@ -23,8 +23,9 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("ainn.agent")
 
 # ── Endpoints (injected via docker-compose environment) ───────────────────────
-def _base_url_from_env(primary: str, legacy: str, default: str) -> str:
-    value = os.getenv(primary) or os.getenv(legacy) or default
+def _base_url_from_env(primary: str, legacy: str | list[str], default: str) -> str:
+    legacy_names = [legacy] if isinstance(legacy, str) else legacy
+    value = os.getenv(primary) or next((os.getenv(name) for name in legacy_names if os.getenv(name)), None) or default
     value = value.strip().rstrip("/")
     return value or default
 
@@ -36,7 +37,7 @@ RAG_SERVICE_URL = _base_url_from_env("RAG_BASE_URL", "RAG_SERVICE_URL", "http://
 SIM_HEALTH_PATH = os.getenv("SIM_HEALTH_PATH", "/health")
 RAG_HEALTH_PATH = os.getenv("RAG_HEALTH_PATH", "/health")
 AGENT_HEALTH_PATH = os.getenv("AGENT_HEALTH_PATH", "/v1/health_check")
-LLM_ENDPOINT = _base_url_from_env("VLLM_BASE_URL", "LLM_ENDPOINT_URL", "http://vllm:8080")
+LLM_ENDPOINT = _base_url_from_env("LLM_BASE_URL", ["VLLM_BASE_URL", "LLM_ENDPOINT_URL"], "")
 HEALTH_PROBE_TIMEOUT_SECONDS = float(os.getenv("HEALTH_PROBE_TIMEOUT_SECONDS", "4.0"))
 STARTUP_PROBE_RETRIES = int(os.getenv("STARTUP_PROBE_RETRIES", "5"))
 STARTUP_PROBE_DELAY_SECONDS = float(os.getenv("STARTUP_PROBE_DELAY_SECONDS", "6.0"))

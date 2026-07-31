@@ -57,10 +57,17 @@ ACTIVE_NETWORK_CONFIG_FILES = [
     Path("CODE/RAG/docker-compose.yml"),
     Path("CODE/Simulation/docker-compose.yml"),
 ]
+SYNTHESIS_DEFAULT_FILES = [
+    Path(".env.example"),
+    Path("CODE/.env.example"),
+    Path("CODE/RAG/.env.example"),
+    Path("CODE/RAG/docker-compose.yml"),
+]
 FORBIDDEN_ACTIVE_NETWORK_PATTERNS = [
     re.compile(r"Tailscale", re.IGNORECASE),
     re.compile(r"https?://100\.\d{1,3}\.\d{1,3}\.\d{1,3}"),
 ]
+CREDENTIAL_BEARING_URL = re.compile(r"https?://[^/\s:@]+:[^@\s/]+@")
 TRACKED_CACHE_PATTERNS = [
     "*/__pycache__/*",
     "__pycache__/*",
@@ -567,6 +574,65 @@ def main() -> int:
     else:
         emit("PASS", "RAG examples and compose default to quickstart with auto-ingest disabled", counts)
 
+    synthesis_findings = []
+    credential_url_findings = []
+    for rel_path in SYNTHESIS_DEFAULT_FILES:
+        path = ROOT / rel_path
+        if not path.exists():
+            synthesis_findings.append(f"{rel_path.as_posix()}: missing")
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if "RAG_SYNTHESIS_BACKEND=deterministic" not in text and "RAG_SYNTHESIS_BACKEND:-deterministic" not in text:
+            synthesis_findings.append(f"{rel_path.as_posix()}: deterministic synthesis default missing")
+        if "LLM_REQUIRED=false" not in text and "LLM_REQUIRED:-false" not in text:
+            synthesis_findings.append(f"{rel_path.as_posix()}: LLM_REQUIRED=false default missing")
+        active_lines = [
+            line.strip()
+            for line in text.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        if any(
+            line.startswith("LLM_BASE_URL=http")
+            or line.startswith("VLLM_BASE_URL=http")
+            or "LLM_BASE_URL:-http" in line
+            or "VLLM_BASE_URL:-http" in line
+            for line in active_lines
+        ):
+            synthesis_findings.append(f"{rel_path.as_posix()}: LLM/vLLM URL is non-empty in default examples")
+        if CREDENTIAL_BEARING_URL.search(text):
+            credential_url_findings.append(rel_path.as_posix())
+    if synthesis_findings:
+        emit("FAIL", f"RAG synthesis defaults are not CPU-safe deterministic: {len(synthesis_findings)}", counts)
+        print_limited("synthesis default findings", synthesis_findings)
+    else:
+        emit("PASS", "RAG synthesis examples and compose default to CPU-safe deterministic mode", counts)
+    if credential_url_findings:
+        emit("FAIL", f"credential-bearing URLs appear in synthesis examples: {len(credential_url_findings)}", counts)
+        print_limited("credential-bearing URL paths", credential_url_findings)
+    else:
+        emit("PASS", "synthesis examples contain no credential-bearing URLs", counts)
+
+    try:
+        services = json.loads((ROOT / SERVICE_CONTRACT).read_text(encoding="utf-8")).get("services", [])
+    except (OSError, json.JSONDecodeError):
+        services = []
+    port_by_name = {service.get("name"): service.get("host_port") for service in services}
+    if port_by_name.get("gateway") == 8888 and port_by_name.get("vllm") == 8080:
+        emit("PASS", "Gateway and optional vLLM ports remain distinct", counts)
+    else:
+        emit("FAIL", f"Gateway/vLLM port contract is unexpected: {port_by_name}", counts)
+
+    vllm_latest_findings = []
+    for rel_path in [Path("CODE/RAG/docker-compose.yml"), Path("DOCs/LLM_BACKENDS.md"), Path("CODE/RAG/README.md")]:
+        path = ROOT / rel_path
+        if path.exists() and re.search(r"vllm[^:\n]*:latest", path.read_text(encoding="utf-8", errors="replace"), re.IGNORECASE):
+            vllm_latest_findings.append(rel_path.as_posix())
+    if vllm_latest_findings:
+        emit("FAIL", f"optional vLLM references use a latest tag: {len(vllm_latest_findings)}", counts)
+        print_limited("vLLM latest references", vllm_latest_findings)
+    else:
+        emit("PASS", "optional vLLM references do not introduce a latest image tag", counts)
+
     for filename in REQUIRED_ROOT_FILES:
         path = ROOT / filename
         if path.exists():
@@ -669,6 +735,8 @@ def main() -> int:
 
     emit("WARN", "full live Simu5G execution has not been validated by the hygiene script", counts)
     emit("WARN", "full semantic RAG clean-machine execution has not been validated by the hygiene script", counts)
+    emit("WARN", "optional vLLM runtime remains untested by the hygiene script", counts)
+    emit("WARN", "OPEA integration is interface-level unless separately validated end to end", counts)
     emit("WARN", "formal four-core quickstart timing remains pending", counts)
     emit("PASS", "quickstart-oriented Simulation replay mode has explicit fixture validation checks", counts)
 

@@ -16,7 +16,7 @@ TelcoMind RAG accepts exactly two profiles: `quickstart` and `full`.
 - `RAG_AUTO_INGEST=false`
 - `RAG_STRICT_PROVENANCE=true`
 
-Legacy `CHROMA_DIR` is still read as a full-profile index-path alias when `RAG_FULL_INDEX_PATH` is absent. `LLM_ENDPOINT_URL` remains a compatibility alias for `VLLM_BASE_URL`.
+Legacy `CHROMA_DIR` is still read as a full-profile index-path alias when `RAG_FULL_INDEX_PATH` is absent. `LLM_BASE_URL` is the canonical optional OpenAI-compatible synthesis URL. `VLLM_BASE_URL` and `LLM_ENDPOINT_URL` remain legacy aliases only when `LLM_BASE_URL` is absent or empty.
 
 ## API Metadata
 
@@ -27,8 +27,8 @@ Quickstart lexical BM25 scores are raw ranking scores. They are not confidence, 
 ## Health And Readiness
 
 - `GET /health` is process liveness only.
-- `GET /ready` returns `200` only when the configured profile is ready. Unavailable `full` mode returns `503`; it does not use quickstart as a substitute.
-- `GET /capabilities` reports supported profiles and optional vLLM configuration without claiming vLLM is reachable unless separately checked.
+- `GET /ready` returns `200` only when the configured profile and synthesis policy are ready. Unavailable `full` mode returns `503`; it does not use quickstart as a substitute. Optional OpenAI-compatible synthesis with deterministic fallback may be reported as degraded-ready when its LLM config is incomplete.
+- `GET /capabilities` reports supported profiles and synthesis backends without claiming an OpenAI-compatible endpoint is reachable based only on URL presence.
 
 ## Offline Evaluator
 
@@ -56,7 +56,8 @@ Do not run this as part of quickstart startup. Full ingestion may load BGE model
 - The RAG API can start in an offline CPU-safe profile once Python dependencies are present.
 - Retrieval uses a committed, traceable corpus derived from existing repository sources.
 - Citation metadata survives retrieval and deterministic synthesis.
-- No Chroma index, model download, vLLM endpoint, Docker startup, or full PDF ingestion is needed.
+- Synthesis defaults to `synthesis_backend=deterministic` with `llm_used=false`.
+- No Chroma index, model download, vLLM/OpenAI-compatible endpoint, Docker startup, or full PDF ingestion is needed.
 
 ## What Quickstart Does Not Prove
 
@@ -65,5 +66,6 @@ Do not run this as part of quickstart startup. Full ingestion may load BGE model
 - It does not prove a fresh full Chroma index can be built quickly.
 - It does not prove under-10-minute four-core setup timing.
 - It does not prove vLLM or GPU behavior.
+- It does not prove optional OpenAI-compatible LLM reachability or output quality.
 
 The full semantic profile remains the production/advanced retrieval path.
