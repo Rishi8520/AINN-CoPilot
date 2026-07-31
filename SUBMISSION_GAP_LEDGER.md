@@ -62,6 +62,9 @@ No root compose file was found.
 - `CODE/Simulation/app/scenarios/results`: 515 files, about 958.7 MiB, 515 tracked files.
 - `CODE/Simulation/app/scenarios/generated`: 487 files, about 2.2 MiB, 487 tracked files.
 - Batch 1 intentionally left both directories untouched for Batch 2 fixture preservation and cleanup.
+- Batch 2 preserves the smallest complete real run found as a recorded replay/parser fixture at `CODE/Simulation/fixtures/replay/phase_bootstrap_normal`.
+- Batch 2 final tracked runtime state is limited to README.md and `.gitkeep` files in the results/generated runtime directories: 4 files, 920 bytes total.
+- Batch 2 final tracked fixture state is 6 files, 3,095,624 bytes total.
 
 ### Root deliverables
 
@@ -98,7 +101,9 @@ No root compose file was found.
 
 ### Repository hygiene and size
 
-The broader local working tree previously measured about 6.9 GiB when ignored local environments and caches were included. The Windows-safe hygiene validator now reports accessible non-cache local content separately from Git-tracked submission content: about 1.1 GiB across 1,137 accessible files locally, and about 1008.0 MiB across 1,129 accessible tracked files. Large tracked Simulation result/generated artifacts remain and need Batch 2 cleanup after preserving small traceable fixtures.
+The broader local working tree previously measured about 6.9 GiB when ignored local environments and caches were included. Batch 1's Windows-safe hygiene validator reported accessible non-cache local content separately from Git-tracked submission content: about 1.1 GiB across 1,137 accessible files locally, and about 1008.0 MiB across 1,129 accessible tracked files.
+
+Batch 2 removes the bulk tracked Simulation runtime outputs after preserving a traceable real fixture. The post-cleanup tracked submission content is about 49.4 MiB across 139 accessible tracked files. The targeted Simulation runtime directories now track only README.md and `.gitkeep`; the recorded fixture is reported separately at about 3.0 MiB.
 
 ### One-click deployment
 
@@ -134,7 +139,7 @@ RAG compose includes vLLM-related configuration. GPU vLLM should remain availabl
 
 ### Simulation quickstart versus real Simu5G mode
 
-The repository includes real Simu5G assets and many runtime outputs. A small quickstart/replay mode needs to be separated from full simulation mode.
+The repository includes real Simu5G assets. Batch 2 removed bulk tracked runtime outputs and retained `phase_bootstrap_normal` as a recorded replay/parser fixture. A small quickstart/replay mode still needs to be separated from full simulation mode in a later batch.
 
 ### Truthful Simulation health/readiness
 
@@ -185,7 +190,7 @@ No tagged commit/archive workflow is documented. The final uploaded EvalAI archi
 | Batch | Goal | Expected files/components | Acceptance gate | Risks |
 | --- | --- | --- | --- | --- |
 | 1. Repository hygiene and readiness ledger | Establish safe ignore rules, remove disposable tracked artifacts, and create this evidence ledger. | `.gitignore`, `CODE/.gitignore`, `SUBMISSION_GAP_LEDGER.md`, `scripts/check_repo_hygiene.py`. | Hygiene script passes with no Batch 1 FAIL findings. | Accidentally hiding required fixtures or overclaiming readiness. |
-| 2. Simulation artifact cleanup and traceable fixtures | Preserve small evidence fixtures, then remove tracked bulk generated/results artifacts. | `CODE/Simulation/app/scenarios/results`, `CODE/Simulation/app/scenarios/generated`, fixture README files. | Repository no longer tracks bulk runtime output; fixtures are documented and reproducible. | Deleting evidence before preserving traceability. |
+| 2. Simulation artifact cleanup and traceable fixtures | Completed in Batch 2: preserved the `phase_bootstrap_normal` recorded fixture, documented provenance/checksums, added parser fixture tests, and removed tracked bulk generated/results artifacts. | `CODE/Simulation/fixtures/replay/phase_bootstrap_normal`, `CODE/Simulation/app/scenarios/results`, `CODE/Simulation/app/scenarios/generated`, `CODE/Simulation/tests/test_replay_fixtures.py`, `scripts/check_repo_hygiene.py`. | Runtime directories track only README.md and `.gitkeep`; fixture manifest and checksums validate; production KPI parser reads the recorded `.sca`. | Fixture proves parser compatibility with one recorded healthy bootstrap run only; live Simu5G startup and degraded/fault replay remain later-batch work. |
 | 3. Canonical ports, environment, and API contracts | Define one local port map and shared env contract. | Root env example, service config docs, compose env wiring. | UI, Gateway, Agent, RAG, and Simulation agree on URLs and ports. | Breaking existing teammate-specific defaults without compatibility notes. |
 | 4. Simulation dual-mode design | Separate quickstart replay/fixture mode from real Simu5G execution. | Simulation config, fixture loader, real runner path. | Quickstart works without compiling full Simu5G; real mode remains available. | Health/readiness could blur fixture mode and real mode. |
 | 5. RAG quickstart/prebuilt-index strategy | Avoid full ingestion in default demo while preserving rebuild path. | Small prebuilt/demo index or fixture corpus, ingestion docs. | Fresh clone can answer demo RAG queries quickly. | Shipping stale or oversized index artifacts. |

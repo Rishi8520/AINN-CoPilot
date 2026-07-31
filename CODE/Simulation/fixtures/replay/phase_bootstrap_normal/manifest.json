@@ -1,0 +1,66 @@
+{
+  "fixture_id": "phase_bootstrap_normal",
+  "description": "Recorded healthy bootstrap Simu5G/OMNeT++ scalar run plus matching vector index and generated INI retained as a minimal parser and replay fixture.",
+  "created_from_existing_repository_artifact": true,
+  "live_simulation": false,
+  "simulation_mode": "recorded_replay_fixture",
+  "scenario_configuration_identifier": "phase_bootstrap_normal",
+  "run_identifier": "General-0-20260728-02:59:43-9667",
+  "source_original_paths": [
+    "CODE/Simulation/app/scenarios/generated/phase_bootstrap_normal.ini",
+    "CODE/Simulation/app/scenarios/results/phase_bootstrap_normal.sca",
+    "CODE/Simulation/app/scenarios/results/phase_bootstrap_normal.vci"
+  ],
+  "files": [
+    {
+      "filename": "phase_bootstrap_normal.ini",
+      "original_filename": "phase_bootstrap_normal.ini",
+      "source_original_path": "CODE/Simulation/app/scenarios/generated/phase_bootstrap_normal.ini",
+      "role": "generated_configuration",
+      "size_bytes": 1881,
+      "sha256": "bbc54b4894b5980c16e51bd2b74b1fdeac92e7e6405f461888b2b892f245e826"
+    },
+    {
+      "filename": "phase_bootstrap_normal.sca",
+      "original_filename": "phase_bootstrap_normal.sca",
+      "source_original_path": "CODE/Simulation/app/scenarios/results/phase_bootstrap_normal.sca",
+      "role": "omnet_scalar_output",
+      "size_bytes": 2305264,
+      "sha256": "ae9cb67aa339eec18d841dac8d895d41c3a8af43de2f218d7fab080469e17bad"
+    },
+    {
+      "filename": "phase_bootstrap_normal.vci",
+      "original_filename": "phase_bootstrap_normal.vci",
+      "source_original_path": "CODE/Simulation/app/scenarios/results/phase_bootstrap_normal.vci",
+      "role": "omnet_vector_index_metadata",
+      "size_bytes": 782984,
+      "sha256": "9d5299e481d50d9758aef8ca96058be39c08f933778b7053eaa0aad5925ff799"
+    }
+  ],
+  "expected_parser_outputs": {
+    "raw_scalar_count": 2649,
+    "aggregate": {
+      "throughput_mbps": 2.1548,
+      "latency_ms": 2.0,
+      "packet_loss_percent": 0.0,
+      "samples": {
+        "throughput": 6,
+        "loss": 6,
+        "delay": 12
+      }
+    },
+    "per_gnb_count": 7,
+    "per_ue_count": 12
+  },
+  "known_limitations": [
+    "The fixture is a recorded artifact and does not prove that Simu5G, INET, OMNeT++, Docker, or service startup works on the current machine.",
+    "No matching .vec payload is retained because no tracked .vec file existed for this run in the repository.",
+    "The fixture represents one bootstrap/healthy configuration only; degraded fault behavior remains a later validation concern."
+  ],
+  "provenance_notes": [
+    "The .sca and .vci files contain run General-0-20260728-02:59:43-9667 and point to the generated phase_bootstrap_normal.ini path.",
+    "The generated INI configures 12 UEs, 60 seconds of simulated time, and output-scalar-file/output-vector-file names for phase_bootstrap_normal.",
+    "Checksums were computed from the copied files during Batch 2 before runtime directories were cleaned."
+  ]
+}
+

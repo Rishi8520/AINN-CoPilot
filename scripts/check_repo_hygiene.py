@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import fnmatch
+import hashlib
+import json
 import os
 import stat
 import subprocess
@@ -15,6 +17,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SIM_RESULTS = Path("CODE/Simulation/app/scenarios/results")
 SIM_GENERATED = Path("CODE/Simulation/app/scenarios/generated")
+SIM_FIXTURES = Path("CODE/Simulation/fixtures/replay")
+SIM_FIXTURE_MANIFEST = SIM_FIXTURES / "phase_bootstrap_normal" / "manifest.json"
+ALLOWED_RUNTIME_TRACKED = {"README.md", ".gitkeep"}
 RAG_CHROMA = Path("CODE/RAG/storage/chroma")
 RAG_STORAGE_CANDIDATES = [
     Path("CODE/RAG/storage"),
@@ -227,6 +232,14 @@ def tracked_measure(paths: list[str]) -> tuple[int, int, list[str]]:
     return file_count, total_size, missing
 
 
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def matches_any(path: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
 
@@ -336,17 +349,84 @@ def main() -> int:
         local_runtime = safe_walk(ROOT / rel_path, skip_general=False)
         tracked_paths = tracked_under(tracked, rel_path)
         tracked_count, tracked_size, _ = tracked_measure(tracked_paths)
+        unexpected_tracked = [
+            path
+            for path in tracked_paths
+            if Path(path).name not in ALLOWED_RUNTIME_TRACKED
+        ]
         if (ROOT / rel_path).exists():
             emit(
-                "WARN" if tracked_count else "PASS",
+                "PASS",
                 (
                     f"{label}: local {local_runtime.files} files, {fmt_size(local_runtime.size)}; "
                     f"tracked {tracked_count} files, {fmt_size(tracked_size)}"
                 ),
                 counts,
             )
+            if unexpected_tracked:
+                emit("FAIL", f"{label}: unexpected tracked runtime files remain: {len(unexpected_tracked)}", counts)
+                print_limited("unexpected tracked runtime paths", unexpected_tracked)
+            else:
+                emit("PASS", f"{label}: tracked files are limited to README.md and .gitkeep", counts)
         else:
             emit("WARN", f"{label}: directory is absent", counts)
+
+    fixture_paths = tracked_under(tracked, SIM_FIXTURES)
+    fixture_count, fixture_size, missing_fixture = tracked_measure(fixture_paths)
+    if (ROOT / SIM_FIXTURES).exists():
+        emit("PASS", f"Simulation replay fixtures: tracked {fixture_count} files, {fmt_size(fixture_size)}", counts)
+    else:
+        emit("FAIL", f"Simulation replay fixture directory is absent: {SIM_FIXTURES.as_posix()}", counts)
+    if missing_fixture:
+        emit("FAIL", f"tracked fixture files are missing or inaccessible: {len(missing_fixture)}", counts)
+        print_limited("missing fixture paths", missing_fixture)
+
+    manifest_path = ROOT / SIM_FIXTURE_MANIFEST
+    if not manifest_path.exists():
+        emit("FAIL", f"Simulation fixture manifest is absent: {SIM_FIXTURE_MANIFEST.as_posix()}", counts)
+    elif SIM_FIXTURE_MANIFEST.as_posix() not in tracked:
+        emit("FAIL", f"Simulation fixture manifest is not tracked: {SIM_FIXTURE_MANIFEST.as_posix()}", counts)
+    else:
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            emit("FAIL", f"Simulation fixture manifest cannot be loaded: {exc}", counts)
+        else:
+            emit("PASS", f"Simulation fixture manifest exists: {SIM_FIXTURE_MANIFEST.as_posix()}", counts)
+            fixture_dir = manifest_path.parent
+            manifest_failures = []
+            for entry in manifest.get("files", []):
+                filename = entry.get("filename")
+                if not filename:
+                    manifest_failures.append("manifest entry without filename")
+                    continue
+                file_path = fixture_dir / filename
+                rel_file = rel(file_path)
+                if rel_file not in tracked:
+                    manifest_failures.append(f"{rel_file} is not tracked")
+                    continue
+                if not file_path.exists():
+                    manifest_failures.append(f"{rel_file} is missing")
+                    continue
+                if file_path.stat().st_size != entry.get("size_bytes"):
+                    manifest_failures.append(f"{rel_file} size mismatch")
+                if file_sha256(file_path) != entry.get("sha256"):
+                    manifest_failures.append(f"{rel_file} sha256 mismatch")
+                source_path = entry.get("source_original_path", "")
+                if not (
+                    source_path.startswith(SIM_RESULTS.as_posix() + "/")
+                    or source_path.startswith(SIM_GENERATED.as_posix() + "/")
+                ):
+                    manifest_failures.append(f"{rel_file} source path is not a Simulation runtime artifact")
+            if manifest.get("live_simulation") is not False:
+                manifest_failures.append("manifest must set live_simulation to false")
+            if manifest.get("created_from_existing_repository_artifact") is not True:
+                manifest_failures.append("manifest must mark fixture as created from existing repository artifacts")
+            if manifest_failures:
+                emit("FAIL", f"Simulation fixture manifest validation failures: {len(manifest_failures)}", counts)
+                print_limited("fixture manifest failures", manifest_failures)
+            else:
+                emit("PASS", "Simulation fixture manifest files exist, are tracked, and match SHA-256 checksums", counts)
 
     if (ROOT / RAG_CHROMA).exists():
         chroma = safe_walk(ROOT / RAG_CHROMA, skip_general=False)
@@ -387,8 +467,8 @@ def main() -> int:
     else:
         emit("PASS", "approved empty disposable tracked artifacts are absent from working tree", counts)
 
-    if tracked_under(tracked, SIM_RESULTS) or tracked_under(tracked, SIM_GENERATED):
-        emit("WARN", "large tracked Simulation runtime artifacts remain for Batch 2 cleanup", counts)
+    emit("WARN", "full live Simu5G execution has not been validated by the hygiene script", counts)
+    emit("WARN", "quickstart/replay mode implementation remains a later-batch validation item", counts)
 
     if not (ROOT / "docker-compose.yml").exists() and not (ROOT / "deploy.sh").exists():
         emit("WARN", "missing root one-click quickstart entry point", counts)
