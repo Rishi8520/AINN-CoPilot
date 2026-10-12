@@ -31,6 +31,7 @@ class FakeResponse:
 
 @pytest.fixture()
 def tools_module(monkeypatch):
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)
     for name in [
         "SIMULATION_BASE_URL",
         "SIM_SERVICE_URL",

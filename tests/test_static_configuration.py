@@ -44,9 +44,13 @@ def test_json_and_jsonl_files_parse():
 
 
 def test_yaml_files_parse():
+    class ComposeLoader(yaml.SafeLoader):
+        pass
+    ComposeLoader.add_constructor("!override", lambda loader, node: loader.construct_sequence(node, deep=True))
     for path in _tracked_files():
         if path.suffix.lower() in {".yml", ".yaml"}:
-            docs = list(yaml.safe_load_all(path.read_text(encoding="utf-8")))
+            loader = ComposeLoader if path.name.startswith("docker-compose.") else yaml.SafeLoader
+            docs = list(yaml.load_all(path.read_text(encoding="utf-8"), Loader=loader))
             assert docs or path.stat().st_size == 0
 
 
