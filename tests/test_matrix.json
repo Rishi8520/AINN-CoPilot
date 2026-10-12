@@ -11,7 +11,8 @@
         "tests/test_root_deployment_contracts.py",
         "tests/test_matrix_contracts.py",
         "tests/test_demo_scenario_contracts.py",
-        "tests/test_demo_runner.py"
+        "tests/test_demo_runner.py",
+        "tests/test_live_jobs.py"
       ],
       "pythonpath": [],
       "category": "contract",
@@ -34,7 +35,7 @@
       "working_directory": "CODE/Agent",
       "runner": "pytest",
       "args": ["tests"],
-      "pythonpath": [".", "tools"],
+      "pythonpath": [".", "tools", "CODE"],
       "category": "component",
       "required": true,
       "fast": true,

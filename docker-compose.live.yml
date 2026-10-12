@@ -1,0 +1,38 @@
+services:
+  simulation:
+    build:
+      context: .
+      dockerfile: CODE/Simulation/Dockerfile.live
+    image: telcomind/simulation-live:local
+    entrypoint: ["uvicorn"]
+    command: ["live.service:app", "--host", "0.0.0.0", "--port", "7000", "--workers", "1"]
+    environment:
+      SIMULATION_DEFAULT_MODE: live
+      SIMULATION_LIVE_ENABLED: "true"
+      SIMULATION_DATA_DIRECTORY: /data
+      SIMULATION_JOB_TIMEOUT_SECONDS: ${SIMULATION_JOB_TIMEOUT_SECONDS:-300}
+    volumes:
+      - live-simulation-data:/data
+    stop_grace_period: 30s
+
+  agent:
+    image: telcomind/agent-live:local
+    environment:
+      AGENT_SIMULATION_MODE: live
+      AGENT_JOB_DIRECTORY: /data/jobs
+      AGENT_JOB_TIMEOUT_SECONDS: ${AGENT_JOB_TIMEOUT_SECONDS:-420}
+    volumes:
+      - live-agent-data:/data
+    stop_grace_period: 30s
+
+  gateway:
+    image: telcomind/agent-live:local
+
+  ui:
+    image: telcomind/ui-live:local
+    environment:
+      UI_DEFAULT_SIMULATION_MODE: live
+
+volumes:
+  live-simulation-data:
+  live-agent-data:

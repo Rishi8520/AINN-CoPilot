@@ -6,12 +6,14 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 RUN groupadd --system telcomind && useradd --system --gid telcomind --home-dir /app telcomind
+RUN mkdir /data && chown telcomind:telcomind /data
 
 COPY CODE/Agent/requirements.quickstart.txt ./requirements.quickstart.txt
 RUN pip install --no-cache-dir -r requirements.quickstart.txt
 
 COPY --chown=telcomind:telcomind CODE/Agent/agent.py ./agent.py
 COPY --chown=telcomind:telcomind CODE/Agent/agent_service.py ./agent_service.py
+COPY --chown=telcomind:telcomind CODE/common ./common
 COPY --chown=telcomind:telcomind CODE/Agent/gateway.py ./gateway.py
 COPY --chown=telcomind:telcomind CODE/Agent/tools ./tools
 
