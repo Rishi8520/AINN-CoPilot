@@ -4,11 +4,12 @@ WORKDIR /app
 
 # Install only what the UI needs
 RUN pip install --no-cache-dir \
-    "streamlit>=1.45.1,<2" \
+    "streamlit==1.65.0" \
     requests==2.31.0 \
     python-dotenv==1.0.1
 
 COPY app.py .
+COPY .streamlit ./.streamlit
 
 EXPOSE 8501
 

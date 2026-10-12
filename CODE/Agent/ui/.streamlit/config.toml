@@ -1,0 +1,36 @@
+[client]
+toolbarMode = "viewer"
+
+[theme]
+base = "light"
+font = "sans-serif"
+baseFontSize = 14
+baseRadius = "6px"
+buttonRadius = "6px"
+showSidebarBorder = true
+
+[theme.light]
+primaryColor = "#087f72"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f2f4f5"
+textColor = "#242a2d"
+borderColor = "#dce1e3"
+dataframeHeaderBackgroundColor = "#eef1f2"
+chartCategoricalColors = ["#087f72", "#4278ba", "#b07825", "#8a677c"]
+
+[theme.light.sidebar]
+backgroundColor = "#f5f6f7"
+secondaryBackgroundColor = "#ffffff"
+
+[theme.dark]
+primaryColor = "#58c7b4"
+backgroundColor = "#111516"
+secondaryBackgroundColor = "#1e2426"
+textColor = "#e5eaeb"
+borderColor = "#343d40"
+dataframeHeaderBackgroundColor = "#242d30"
+chartCategoricalColors = ["#58c7b4", "#82afe2", "#d9aa59", "#ba91ab"]
+
+[theme.dark.sidebar]
+backgroundColor = "#181d1f"
+secondaryBackgroundColor = "#242d30"
