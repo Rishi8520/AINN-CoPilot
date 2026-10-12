@@ -46,6 +46,7 @@ class SynthesisRequest(BaseModel):
     top_k: Optional[int] = Field(default=None, ge=1, le=20)
     contexts: Optional[list[SourceChunk]] = None
     simulation_kpis: Optional[dict[str, Any]] = None
+    simulation_context: Optional[dict[str, Any]] = None
     intent_type: Optional[str] = None
 
 
