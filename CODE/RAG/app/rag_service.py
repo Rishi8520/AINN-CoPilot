@@ -111,8 +111,10 @@ async def capabilities():
             "full": "chroma_bge_reranker",
         },
         "deterministic_synthesis": True,
-        "supported_synthesis_backends": ["deterministic", "openai_compatible"],
+        "supported_synthesis_backends": ["deterministic", "openai_compatible", "opea_agent"],
         "configured_synthesis_backend": config.RAG_SYNTHESIS_BACKEND,
+        "opea_agent": {"configured": bool(config.OPEA_AGENT_URL), "execution_verified": False,
+                       "verification": "Check synthesis_backend=opea_agent on a completed query."},
         "openai_compatible": {
             "configured": bool(config.LLM_BASE_URL and config.LLM_MODEL),
             "provider": config.LLM_PROVIDER,
@@ -231,6 +233,7 @@ async def synthesize(req: SynthesisRequest):
             query=query,
             sources=sources,
             simulation_kpis=req.simulation_kpis,
+            simulation_context=req.simulation_context,
             intent_type=req.intent_type,
         )
     except SynthesisFailure as exc:
