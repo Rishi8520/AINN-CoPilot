@@ -1,0 +1,51 @@
+FROM ubuntu:24.04 AS toolchain
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+ARG DEBIAN_FRONTEND=noninteractive
+ARG BUILD_JOBS=2
+RUN apt-get -o Acquire::Retries=3 update && apt-get install -y --no-install-recommends \
+    build-essential clang lld bison flex perl pkg-config python3 python3-venv \
+    libxml2-dev zlib1g-dev libdw-dev libsqlite3-dev ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt
+ADD https://github.com/omnetpp/omnetpp/releases/download/omnetpp-6.3.0/omnetpp-6.3.0-core.tgz /tmp/omnetpp.tgz
+ADD https://codeload.github.com/inet-framework/inet/tar.gz/refs/tags/v4.5.4 /tmp/inet.tgz
+ADD https://codeload.github.com/Unipisa/Simu5G/tar.gz/refs/tags/v1.4.4 /tmp/simu5g.tgz
+RUN printf '%s\n' \
+    '8bfe89e36c0fc1e80853b46e27c01cff670002fdd2abdba989e8148240748fd1  /tmp/omnetpp.tgz' \
+    'e278af75a514076734650ec8edc08ff6e66c565b5616298d9d3b04ed9731c87b  /tmp/inet.tgz' \
+    '2ba8ebdf1bd7343be44f972d6ae3e8f7c4a9dd8e39fbbf6d80a7cbfabaab2796  /tmp/simu5g.tgz' \
+    | sha256sum --check \
+    && mkdir omnetpp inet simu5g \
+    && tar -xzf /tmp/omnetpp.tgz -C omnetpp --strip-components=1 \
+    && tar -xzf /tmp/inet.tgz -C inet --strip-components=1 \
+    && tar -xzf /tmp/simu5g.tgz -C simu5g --strip-components=1 \
+    && rm /tmp/omnetpp.tgz /tmp/inet.tgz /tmp/simu5g.tgz
+RUN cd /opt/omnetpp && cp configure.user.dist configure.user \
+    && sed -i -e 's/^WITH_QTENV=.*/WITH_QTENV=no/' \
+      -e 's/^WITH_OSG=.*/WITH_OSG=no/' \
+      -e 's/^WITH_SCAVE_PYTHON_BINDINGS=.*/WITH_SCAVE_PYTHON_BINDINGS=no/' configure.user \
+    && source setenv && ./configure && make MODE=release -j"${BUILD_JOBS}"
+ARG MODEL_BUILD_JOBS=4
+RUN source /opt/omnetpp/setenv && cd /opt/inet && source setenv -q \
+    && make makefiles && make MODE=release -j"${MODEL_BUILD_JOBS}"
+RUN source /opt/omnetpp/setenv && source /opt/inet/setenv -q \
+    && cd /opt/simu5g && source setenv -f \
+    && make MODE=release -j"${MODEL_BUILD_JOBS}"
+ENV PATH="/opt/omnetpp/bin:/opt/inet/bin:/opt/simu5g/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/opt/omnetpp/lib:/opt/inet/src:/opt/simu5g/src"
+
+FROM toolchain AS live
+WORKDIR /workspace
+RUN python3 -m venv /opt/api \
+    && /opt/api/bin/pip install --no-cache-dir fastapi==0.111.0 uvicorn==0.30.1 pydantic==2.7.4
+ENV PATH="/opt/api/bin:${PATH}"
+COPY CODE/common /workspace/common
+COPY CODE/Simulation/app/api/schemas.py /workspace/app/api/schemas.py
+COPY CODE/Simulation/app/simulator/replay_service.py CODE/Simulation/app/simulator/kpi_parser.py CODE/Simulation/app/simulator/mode_config.py /workspace/app/simulator/
+COPY CODE/Simulation/fixtures /workspace/fixtures
+COPY CODE/Simulation/live /workspace/live
+RUN useradd --create-home --uid 10001 simulator \
+    && mkdir /data && chown simulator:simulator /data
+USER simulator
+ENTRYPOINT ["python3", "/workspace/live/run.py"]
+CMD ["--ue-count", "10", "--duration", "10", "--output-dir", "/data"]
