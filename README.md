@@ -2,8 +2,19 @@
 
 TelcoMind is an AI-native operations copilot for telecom networks. It lets an operator
 ask natural-language questions and receive citation-grounded, evidence-backed diagnoses
-that combine standards/runbook knowledge with recorded telecom simulation telemetry —
+that combine standards/runbook knowledge with fresh Simu5G experiments or recorded telemetry —
 delivered through a single-node, one-click Docker Compose stack.
+
+`./deploy.sh` now selects the live simulation stack. Open the Streamlit UI and ask
+for a baseline simulation to see job progress, measured KPIs and charts, cited
+diagnosis, and downloadable run artifacts. Pure standards questions use RAG
+without starting a simulation. See [the live workflow](DOCs/live-workflow.md)
+and [traffic burst, resource comparison, and mobility scenarios](DOCs/live-scenarios.md).
+
+`./deploy.sh --opea` selects the real OPEA agent for evidence-grounded reasoning
+with OpenAI, while retaining the existing simulation job workflow. It requires
+private model credentials and makes paid inference requests during verification.
+See [OPEA configuration and verification](DOCs/opea-integration.md).
 
 ## Overview and Business Problem
 
@@ -23,6 +34,10 @@ did and did not do.
   (runbooks and scenario/spec excerpts).
 - **Recorded telecom simulation replay** — deterministic replay of a recorded phase fixture
   with explicit provenance, not a newly executed live simulation.
+- **Fresh seven-cell baseline simulation** — isolated Simu5G runs with requested UE
+  counts and seeds, measured application telemetry, progress, and cancellation.
+- **Traffic, resource, and mobility experiments** — bounded traffic bursts,
+  same-seed resource-band comparisons, and moving UEs with recorded serving-cell transitions.
 - **Citation-grounded deterministic synthesis** — answers are assembled deterministically
   from retrieved chunks with explicit citation IDs.
 - **Explicit dependency and unsupported-scenario failure behavior** — the system surfaces
@@ -48,7 +63,7 @@ flowchart LR
 
 ## Truthful Quickstart Defaults
 
-The default quickstart is intentionally lightweight and reproducible:
+The explicit replay quickstart (`./deploy.sh --replay`) is intentionally lightweight and reproducible:
 
 - **Recorded replay**, not a newly executed Simu5G run.
 - **Lexical BM25 retrieval**, not semantic/vector retrieval.
@@ -84,8 +99,13 @@ Bash:
 Direct Compose:
 
 ```bash
-docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.live.yml up -d --build
 ```
+
+For the lightweight recorded demo, run `./deploy.sh --replay` or
+`.\deploy.ps1 -Replay`. The first live build downloads and compiles the simulator;
+it can take longer than ten minutes. Subsequent runs reuse compiled Docker layers.
+The root deployment reads the repository-root `.env`, not `CODE/.env`.
 
 ## Services
 
