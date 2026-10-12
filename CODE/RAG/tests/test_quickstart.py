@@ -117,6 +117,17 @@ def test_no_match_query_is_honest_empty():
     assert retriever.search("xylophone marmalade asteroid", top_k=5) == []
 
 
+def test_definition_retrieves_overview_and_baseline_retrieves_measurement_guidance():
+    retriever = LexicalBM25Retriever()
+    definition = retriever.search("what is O-RAN", top_k=4)
+    assert "overview" in definition[0]["metadata"]["section"].lower()
+    assert any("Open RAN" in row["text"] for row in definition)
+    security = retriever.search("Explain O-RAN security architecture", top_k=4)
+    assert any("security" in row["metadata"]["section"].lower() for row in security)
+    baseline = retriever.search("Run a baseline simulation with 100 UEs and analyze throughput and latency", top_k=4)
+    assert any("baseline_measurement_runbook" in row["metadata"]["source"] for row in baseline)
+
+
 def test_quickstart_import_does_not_load_heavy_modules(monkeypatch):
     for module_name in ["chromadb", "sentence_transformers", "torch"]:
         sys.modules.pop(module_name, None)

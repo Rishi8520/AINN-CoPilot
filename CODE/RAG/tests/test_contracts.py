@@ -1,4 +1,5 @@
 import importlib
+import importlib.machinery
 import json
 import sys
 import types
@@ -12,6 +13,7 @@ for module_name in list(sys.modules):
 
 if importlib.util.find_spec("chromadb") is None:
     chromadb_stub = types.ModuleType("chromadb")
+    chromadb_stub.__spec__ = importlib.machinery.ModuleSpec("chromadb", loader=None)
     chromadb_stub.PersistentClient = object
     sys.modules["chromadb"] = chromadb_stub
 
@@ -321,7 +323,7 @@ def test_synthesis_default_llm_disabled_uses_deterministic_path(monkeypatch):
         sources=_sample_sources(),
     )
 
-    assert response.answer.startswith("Based on the retrieved context")
+    assert response.answer.startswith("**Retrieved evidence**")
     assert response.citations[0].title == "Handover Failure Runbook"
     assert response.requested_backend == "deterministic"
     assert response.synthesis_backend == "deterministic"
@@ -398,7 +400,7 @@ def test_synthesis_llm_failure_falls_back_deterministically(monkeypatch):
         sources=_sample_sources(),
     )
 
-    assert response.answer.startswith("Based on the retrieved context")
+    assert response.answer.startswith("**Retrieved evidence**")
     assert response.synthesis_backend == "deterministic"
     assert response.llm_used is False
     assert response.fallback_used is True
