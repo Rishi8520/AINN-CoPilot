@@ -2,13 +2,22 @@ param(
     [switch]$Status,
     [switch]$Logs,
     [switch]$Down,
-    [switch]$Verify
+    [switch]$Verify,
+    [switch]$Replay,
+    [switch]$Opea
 )
 
 $ErrorActionPreference = "Stop"
+if ($Opea -and $Replay) { throw "OPEA deployment verification requires the live profile. Select replay per query in the UI." }
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ProjectName = if ($env:COMPOSE_PROJECT_NAME) { $env:COMPOSE_PROJECT_NAME } else { "telcomind-quickstart" }
+$EnvFile = $null
+if (Test-Path -LiteralPath (Join-Path $Root ".env") -PathType Leaf) {
+    $EnvFile = Join-Path $Root ".env"
+} elseif (Test-Path -LiteralPath (Join-Path $Root "CODE/.env") -PathType Leaf) {
+    $EnvFile = Join-Path $Root "CODE/.env"
+}
 $Services = @("simulation", "rag", "agent", "gateway", "ui")
+if ($Opea) { $Services = @("opea-reasoner") + $Services }
 $StartedAt = Get-Date
 
 function Write-Log {
@@ -17,7 +26,13 @@ function Write-Log {
 }
 
 function Invoke-Compose {
-    docker compose --project-directory $Root --project-name $ProjectName @args
+    $Files = @("-f", (Join-Path $Root "docker-compose.yml"))
+    if (-not $Replay) { $Files += @("-f", (Join-Path $Root "docker-compose.live.yml")) }
+    if ($Opea) { $Files += @("-f", (Join-Path $Root "docker-compose.opea.yml")) }
+    $EnvArgs = @()
+    if ($EnvFile) { $EnvArgs = @("--env-file", $EnvFile) }
+    docker compose --project-directory $Root @EnvArgs @Files @args
+    if ($LASTEXITCODE -ne 0) { throw "Docker Compose failed with exit code $LASTEXITCODE" }
 }
 
 function Require-Docker {
@@ -28,6 +43,9 @@ function Require-Docker {
     docker compose version | Out-Null
     Write-Log ("Docker: " + (docker version --format '{{.Client.Version}}'))
     Write-Log ("Compose: " + (docker compose version --short))
+    if ($EnvFile) { Write-Log ("Using environment file: " + $EnvFile) }
+    else { Write-Log "No .env or CODE/.env found; using Compose defaults and exported variables." }
+    Invoke-Compose config --quiet
 }
 
 function Require-Files {
@@ -37,7 +55,9 @@ function Require-Files {
         "CODE/RAG/Dockerfile.quickstart",
         "CODE/Agent/Dockerfile.quickstart",
         "CODE/Agent/ui/Dockerfile.quickstart",
-        "scripts/smoke_test.py"
+        "scripts/smoke_test.py",
+        "docker-compose.live.yml",
+        "scripts/smoke_live.py"
     )
     foreach ($File in $Files) {
         $Path = Join-Path $Root $File
@@ -63,16 +83,22 @@ function Test-PortFree {
 }
 
 function Check-Ports {
-    $Ports = @(
-        $(if ($env:HOST_SIMULATION_PORT) { [int]$env:HOST_SIMULATION_PORT } else { 7000 }),
-        $(if ($env:HOST_RAG_PORT) { [int]$env:HOST_RAG_PORT } else { 7001 }),
-        $(if ($env:HOST_AGENT_PORT) { [int]$env:HOST_AGENT_PORT } else { 9090 }),
-        $(if ($env:HOST_GATEWAY_PORT) { [int]$env:HOST_GATEWAY_PORT } else { 8888 }),
-        $(if ($env:HOST_UI_PORT) { [int]$env:HOST_UI_PORT } else { 8501 })
-    )
-    foreach ($Port in $Ports) {
-        Test-PortFree -Port $Port
+    if (Invoke-Compose ps -q) {
+        Write-Log "Updating the existing project; Docker will retain its port bindings."
+        return
     }
+    $Config = Invoke-Compose config --format json | ConvertFrom-Json
+    foreach ($Service in $Services) {
+        foreach ($Port in $Config.services.$Service.ports) {
+            Test-PortFree -Port ([int]$Port.published)
+        }
+    }
+}
+
+function Get-HostPort {
+    param([string]$Service, [int]$InternalPort)
+    $Binding = Invoke-Compose port $Service $InternalPort | Select-Object -Last 1
+    return ($Binding -split ":")[-1]
 }
 
 function Get-HealthStatus {
@@ -107,12 +133,18 @@ function Wait-Healthy {
 }
 
 function Invoke-Smoke {
+    $SmokeFile = if ($Replay) { "scripts/smoke_test.py" } else { "scripts/smoke_live.py" }
     $Python = Get-Command python -ErrorAction SilentlyContinue
     if (-not $Python) {
         $Python = Get-Command python3 -ErrorAction SilentlyContinue
     }
     if ($Python) {
-        & $Python.Source (Join-Path $Root "scripts/smoke_test.py")
+        & $Python.Source (Join-Path $Root $SmokeFile) `
+            --simulation-url "http://localhost:$(Get-HostPort simulation 7000)" `
+            --rag-url "http://localhost:$(Get-HostPort rag 7001)" `
+            --agent-url "http://localhost:$(Get-HostPort agent 9090)" `
+            --gateway-url "http://localhost:$(Get-HostPort gateway 8888)" `
+            --ui-url "http://localhost:$(Get-HostPort ui 8501)"
         if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
         }
@@ -120,7 +152,7 @@ function Invoke-Smoke {
     }
 
     Write-Log "Host Python is unavailable; running smoke test in a disposable Python container."
-    $SmokePath = Join-Path $Root "scripts/smoke_test.py"
+    $SmokePath = Join-Path $Root $SmokeFile
     $SimulationPort = if ($env:HOST_SIMULATION_PORT) { $env:HOST_SIMULATION_PORT } else { "7000" }
     $RagPort = if ($env:HOST_RAG_PORT) { $env:HOST_RAG_PORT } else { "7001" }
     $AgentPort = if ($env:HOST_AGENT_PORT) { $env:HOST_AGENT_PORT } else { "9090" }
@@ -181,12 +213,6 @@ if ($Verify) {
 Require-Docker
 Require-Files
 Check-Ports
-if (Test-Path -LiteralPath (Join-Path $Root ".env")) {
-    Write-Log "Using existing .env without modifying it."
-}
-else {
-    Write-Log "No .env found; using docker-compose.yml defaults."
-}
 Invoke-Compose up -d --build
 Wait-Healthy
 Invoke-Compose ps
