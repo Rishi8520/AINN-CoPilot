@@ -1,0 +1,63 @@
+services:
+  opea-reasoner:
+    image: opea/agent@sha256:26b584af87ec3349f84c88a9687bea07cb2319754c788b11c686cdbb9b1f027b
+    init: true
+    entrypoint: ["python"]
+    command: ["/home/user/telcomind/bootstrap.py"]
+    environment:
+      OPENAI_API_KEY: ${LLM_API_KEY:?Set LLM_API_KEY privately in the selected .env or CODE/.env}
+      model: ${LLM_MODEL:?Set an OpenAI chat model privately in the selected env file}
+      OPEA_MAX_COMPLETION_TOKENS: ${OPEA_MAX_COMPLETION_TOKENS:-4096}
+      OPEA_REASONING_EFFORT: ${OPEA_REASONING_EFFORT:-minimal}
+      llm_engine: openai
+      llm_endpoint_url: https://api.openai.com
+      strategy: react_langgraph
+      with_memory: "false"
+      tools: ""
+      stream: "false"
+      custom_prompt: /home/user/telcomind/evidence_prompt.py
+      max_new_tokens: ${LLM_MAX_TOKENS:-1024}
+      temperature: "0"
+      top_p: "1"
+      recursion_limit: "5"
+      timeout: "60"
+    volumes:
+      - ./CODE/Agent/opea:/home/user/telcomind:ro
+    networks:
+      - telcomind
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:9090/openapi.json',timeout=5)); assert 'post' in d['paths']['/v1/chat/completions']"]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 30s
+    restart: on-failure:3
+
+  rag:
+    ports: !override ["127.0.0.1:${HOST_RAG_PORT:-7001}:7001"]
+    environment:
+      RAG_SYNTHESIS_BACKEND: opea_agent
+      OPEA_AGENT_URL: http://opea-reasoner:9090
+      OPEA_READ_TIMEOUT_SECONDS: "120"
+      LLM_PROVIDER: openai
+      LLM_API_KEY: ""
+      LLM_BASE_URL: ""
+      LLM_REQUIRED: "true"
+      LLM_FALLBACK_TO_DETERMINISTIC: "false"
+    depends_on:
+      opea-reasoner:
+        condition: service_healthy
+
+  agent:
+    ports: !override ["127.0.0.1:${HOST_AGENT_PORT:-9090}:9090"]
+    environment:
+      AGENT_REQUEST_TIMEOUT_SECONDS: "180"
+
+  gateway:
+    ports: !override ["127.0.0.1:${HOST_GATEWAY_PORT:-8888}:8888"]
+
+  ui:
+    ports: !override ["127.0.0.1:${HOST_UI_PORT:-8501}:8501"]
+
+  simulation:
+    ports: !override ["127.0.0.1:${HOST_SIMULATION_PORT:-7000}:7000"]
