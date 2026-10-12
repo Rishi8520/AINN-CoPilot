@@ -82,8 +82,8 @@ def _synthesis_backend_env() -> str:
         value = (raw or "").strip().lower()
     if not value:
         return "deterministic"
-    if value not in {"deterministic", "openai_compatible"}:
-        raise ValueError("RAG_SYNTHESIS_BACKEND must be one of: deterministic, openai_compatible")
+    if value not in {"deterministic", "openai_compatible", "opea_agent"}:
+        raise ValueError("RAG_SYNTHESIS_BACKEND must be one of: deterministic, openai_compatible, opea_agent")
     return value
 
 
@@ -114,6 +114,8 @@ RERANK_TOP_K = _int_env("RERANK_TOP_K", 4)
 RAG_DEVICE = os.getenv("RAG_DEVICE", "auto")
 CHROMA_UPSERT_BATCH_SIZE = _int_env("CHROMA_UPSERT_BATCH_SIZE", 1000)
 RAG_SYNTHESIS_BACKEND = _synthesis_backend_env()
+OPEA_AGENT_URL = _base_url_env("OPEA_AGENT_URL", default="")
+OPEA_READ_TIMEOUT_SECONDS = _bounded_float_env("OPEA_READ_TIMEOUT_SECONDS", 120, 1, 300)
 LLM_PROVIDER = _str_env("LLM_PROVIDER", default="openai_compatible").lower()
 LLM_BASE_URL = _base_url_env("LLM_BASE_URL", ["VLLM_BASE_URL", "LLM_ENDPOINT_URL"], "")
 LLM_ENDPOINT_URL = LLM_BASE_URL
@@ -129,4 +131,4 @@ LLM_READ_TIMEOUT_SECONDS = _bounded_float_env("LLM_READ_TIMEOUT_SECONDS", 30.0, 
 LLM_MAX_TOKENS = _bounded_int_env("LLM_MAX_TOKENS", 512, 1, 4096)
 LLM_TEMPERATURE = _bounded_float_env("LLM_TEMPERATURE", 0.0, 0.0, 2.0)
 LLM_TIMEOUT_SECONDS = int(LLM_READ_TIMEOUT_SECONDS)
-LLM_ENABLED = RAG_SYNTHESIS_BACKEND == "openai_compatible"
+LLM_ENABLED = RAG_SYNTHESIS_BACKEND in {"openai_compatible", "opea_agent"}
