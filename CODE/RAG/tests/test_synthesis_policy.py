@@ -40,6 +40,101 @@ def _sample_sources(text: str | None = None) -> list[SourceChunk]:
     ]
 
 
+def test_definition_has_no_operational_recommendation(monkeypatch):
+    monkeypatch.setattr(config, "RAG_SYNTHESIS_BACKEND", "deterministic")
+    response = synthesis.synthesize_response(
+        "What is O-RAN?", _sample_sources("O-RAN promotes open, interoperable RAN interfaces."),
+        intent_type="GENERAL_QNA",
+    )
+    assert response.recommended_action == ""
+    assert "[C1]" in response.answer
+    assert "network measurements" not in response.answer
+
+
+def test_opea_reasoning_records_actual_backend(monkeypatch):
+    monkeypatch.setattr(config, "RAG_SYNTHESIS_BACKEND", "opea_agent")
+    monkeypatch.setattr(config, "OPEA_AGENT_URL", "http://opea:9090")
+    monkeypatch.setattr(synthesis, "complete_opea", lambda *args: type("Completion", (), {
+        "content": "Weak radio conditions are a diagnostic hypothesis [C1].", "response_model": None})())
+    result = synthesis.synthesize_response("Why did handover fail?", _sample_sources())
+    assert result.synthesis_backend == "opea_agent"
+    assert result.requested_backend == "opea_agent" and result.llm_used
+    assert result.attempted_provider == "opea" and not result.fallback_used
+
+
+@pytest.mark.parametrize("answer", ["An error occurred", "An invented claim [C99]"])
+def test_required_opea_rejects_missing_or_unknown_citations(monkeypatch, answer):
+    monkeypatch.setattr(config, "RAG_SYNTHESIS_BACKEND", "opea_agent")
+    monkeypatch.setattr(config, "LLM_FALLBACK_TO_DETERMINISTIC", False)
+    monkeypatch.setattr(synthesis, "complete_opea", lambda *args: type("Completion", (), {
+        "content": answer, "response_model": None})())
+    with pytest.raises(synthesis.SynthesisFailure) as error:
+        synthesis.synthesize_response("Why did handover fail?", _sample_sources())
+    assert error.value.detail["error_category"] == "opea_citation_validation"
+    assert error.value.detail["llm_used"] is False
+
+
+@pytest.mark.parametrize("text", ['Upstream authentication error', '{"status":"ok"}', '{"status":"error","answer":"bad"}'])
+def test_opea_http_success_is_not_reasoning_success(monkeypatch, text):
+    from app import opea_client
+    def handler(request):
+        assert json.loads(request.content)["stream"] is False
+        return httpx.Response(200, json={"text": text})
+    original = httpx.Client
+    monkeypatch.setattr(opea_client.httpx, "Client", lambda **kwargs: original(transport=httpx.MockTransport(handler)))
+    with pytest.raises(LLMClientError) as error:
+        opea_client.complete_opea("http://opea:9090", "Evidence")
+    assert error.value.category == "opea_invalid_response"
+
+
+def test_opea_client_reads_generated_doc_json(monkeypatch):
+    from app import opea_client
+    original = httpx.Client
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={
+        "text": json.dumps({"status": "ok", "answer": "Supported evidence [C1]."})}))
+    monkeypatch.setattr(opea_client.httpx, "Client", lambda **kwargs: original(transport=transport))
+    assert opea_client.complete_opea("http://opea:9090", "Evidence").content == "Supported evidence [C1]."
+
+
+@pytest.mark.parametrize("count,throughput,delay", [(10, 8.0, 4.9999999999999005), (100, 80.0, 5.740211764705826)])
+def test_baseline_reports_measurements_not_handover_advice(monkeypatch, count, throughput, delay):
+    monkeypatch.setattr(config, "RAG_SYNTHESIS_BACKEND", "deterministic")
+    source = _sample_sources()[0].model_copy(update={"section": "handover_failure"})
+    kpis = {"throughput_mbps": throughput, "latency_ms": delay, "undelivered_percent": 0.0}
+    context = {"mobility": "stationary", "per_ue_summary": {
+        "throughput_mbps": {"min": 0.8, "max": 0.8, "count": count}},
+        "measurement": {"note": "Undelivered includes packets still in flight at stop time."}}
+    response = synthesis.synthesize_response("Run a baseline simulation", [source], kpis, "DIAGNOSTIC", context)
+    assert response.used_simulation_kpis == kpis
+    assert "4.999999" not in response.answer
+    assert f"across {count} measured UEs" in response.answer
+    assert "not a handover experiment" in response.answer
+    assert "still in flight" in response.answer
+    assert "Check handover" not in response.recommended_action
+    assert response.citations == []
+
+
+def test_llm_prompt_includes_experiment_limits():
+    prompt = synthesis._llm_prompt("Diagnose baseline", _sample_sources(), {"throughput_mbps": 8},
+                                   "DIAGNOSTIC", {"mobility": "stationary", "mode": "live"})
+    assert '"mobility": "stationary"' in prompt
+    assert "cannot establish handover failure" in prompt
+
+
+@pytest.mark.parametrize("scenario", ["traffic_burst", "resource_comparison", "mobility_handover"])
+def test_live_scenario_recommendations_do_not_invent_faults(monkeypatch, scenario):
+    monkeypatch.setattr(config, "RAG_SYNTHESIS_BACKEND", "deterministic")
+    source = _sample_sources()[0].model_copy(update={"section": scenario})
+    context = {"scenario": scenario, "mobility": "linear" if scenario == "mobility_handover" else "stationary",
+               "handover": {"serving_cell_transitions": 1, "note": "Not a success rate."}}
+    response = synthesis.synthesize_response("Simulate mobility handovers", [source], {"throughput_mbps": 8.0}, "DIAGNOSTIC", context)
+    assert "Check handover-related" not in response.recommended_action
+    assert response.citations
+    if scenario == "mobility_handover":
+        assert "No fault was injected" in response.answer
+        assert "No handover fault was injected" in response.recommended_action
+
+
 def _reload_config(monkeypatch, **env):
     for name in [
         "RAG_SYNTHESIS_BACKEND",
