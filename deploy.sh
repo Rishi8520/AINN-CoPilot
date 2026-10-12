@@ -2,20 +2,40 @@
 set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_NAME="${COMPOSE_PROJECT_NAME:-telcomind-quickstart}"
+ENV_ARGS=()
+ENV_FILE=""
+if [[ -f "$ROOT/.env" ]]; then
+  ENV_FILE="$ROOT/.env"
+elif [[ -f "$ROOT/CODE/.env" ]]; then
+  ENV_FILE="$ROOT/CODE/.env"
+fi
+[[ -z "$ENV_FILE" ]] || ENV_ARGS=(--env-file "$ENV_FILE")
 SERVICES=(simulation rag agent gateway ui)
 STARTED_AT="$(date +%s)"
+COMPOSE_FILES=(-f "$ROOT/docker-compose.yml" -f "$ROOT/docker-compose.live.yml")
+DEPLOY_MODE=live
+if [[ "${1:-}" == "--replay" ]]; then
+  COMPOSE_FILES=(-f "$ROOT/docker-compose.yml")
+  DEPLOY_MODE=replay
+  shift
+fi
+if [[ "${1:-}" == "--opea" ]]; then
+  [[ "$DEPLOY_MODE" == live ]] || { printf 'OPEA deployment verification requires the live profile. Select replay per query in the UI.\n'; exit 2; }
+  COMPOSE_FILES+=(-f "$ROOT/docker-compose.opea.yml")
+  SERVICES=(opea-reasoner "${SERVICES[@]}")
+  shift
+fi
 
 log() {
   printf '[%s] %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"
 }
 
 usage() {
-  printf 'Usage: %s [--status|--logs|--down|--verify]\n' "$0"
+  printf 'Usage: %s [--replay] [--opea] [--status|--logs|--down|--verify]\n' "$0"
 }
 
 compose() {
-  docker compose --project-directory "$ROOT" --project-name "$PROJECT_NAME" "$@"
+  docker compose --project-directory "$ROOT" "${ENV_ARGS[@]}" "${COMPOSE_FILES[@]}" "$@"
 }
 
 require_docker() {
@@ -24,6 +44,15 @@ require_docker() {
   docker compose version >/dev/null
   log "Docker: $(docker version --format '{{.Client.Version}}')"
   log "Compose: $(docker compose version --short)"
+  if [[ -n "$ENV_FILE" ]]; then
+    log "Using environment file: ${ENV_FILE#"$ROOT/"}"
+  else
+    log "No .env or CODE/.env found; using Compose defaults and exported variables."
+  fi
+  if ! compose config --quiet; then
+    log "Compose configuration is invalid. Check the selected environment file and required variables."
+    exit 1
+  fi
 }
 
 required_files() {
@@ -34,6 +63,9 @@ required_files() {
     "$ROOT/CODE/Agent/Dockerfile.quickstart"
     "$ROOT/CODE/Agent/ui/Dockerfile.quickstart"
     "$ROOT/scripts/smoke_test.py"
+    "$ROOT/docker-compose.live.yml"
+    "$ROOT/CODE/Simulation/live/service.py"
+    "$ROOT/scripts/smoke_live.py"
   )
   for file in "${files[@]}"; do
     [[ -f "$file" ]] || { log "Required file is missing: $file"; exit 1; }
@@ -41,8 +73,16 @@ required_files() {
 }
 
 check_ports() {
+  if [[ -n "$(compose ps -q 2>/dev/null)" ]]; then
+    log "Updating the existing project; Docker will retain its port bindings."
+    return
+  fi
   local ports=("${HOST_SIMULATION_PORT:-7000}" "${HOST_RAG_PORT:-7001}" "${HOST_AGENT_PORT:-9090}" "${HOST_GATEWAY_PORT:-8888}" "${HOST_UI_PORT:-8501}")
   if command -v python3 >/dev/null 2>&1; then
+    local config_json port_lines
+    config_json="$(compose config --format json)" || return 1
+    port_lines="$(python3 -c 'import json,sys; config=json.load(sys.stdin); print("\n".join(str(port["published"]) for name in ("simulation","rag","agent","gateway","ui") for port in config["services"][name]["ports"]))' <<< "$config_json")" || return 1
+    mapfile -t ports <<< "$port_lines"
     python3 - "$@" "${ports[@]}" <<'PY'
 import socket
 import sys
@@ -96,32 +136,48 @@ wait_healthy() {
 }
 
 run_smoke() {
+  local smoke="$ROOT/scripts/smoke_test.py"
+  [[ "$DEPLOY_MODE" == live ]] && smoke="$ROOT/scripts/smoke_live.py"
   if command -v python3 >/dev/null 2>&1; then
-    python3 "$ROOT/scripts/smoke_test.py"
+    python3 "$smoke" \
+      --simulation-url "http://localhost:$(host_port simulation 7000)" \
+      --rag-url "http://localhost:$(host_port rag 7001)" \
+      --agent-url "http://localhost:$(host_port agent 9090)" \
+      --gateway-url "http://localhost:$(host_port gateway 8888)" \
+      --ui-url "http://localhost:$(host_port ui 8501)"
   elif command -v python >/dev/null 2>&1; then
-    python "$ROOT/scripts/smoke_test.py"
+    python "$smoke" \
+      --simulation-url "http://localhost:$(host_port simulation 7000)" \
+      --rag-url "http://localhost:$(host_port rag 7001)" \
+      --agent-url "http://localhost:$(host_port agent 9090)" \
+      --gateway-url "http://localhost:$(host_port gateway 8888)" \
+      --ui-url "http://localhost:$(host_port ui 8501)"
   else
     log "Host Python is unavailable; running smoke test in a disposable Python container."
     docker run --rm \
       --add-host=host.docker.internal:host-gateway \
-      -v "$ROOT/scripts/smoke_test.py:/smoke_test.py:ro" \
+      -v "$smoke:/smoke_test.py:ro" \
       python:3.11.10-slim-bookworm \
       python /smoke_test.py \
-      --simulation-url "http://host.docker.internal:${HOST_SIMULATION_PORT:-7000}" \
-      --rag-url "http://host.docker.internal:${HOST_RAG_PORT:-7001}" \
-      --agent-url "http://host.docker.internal:${HOST_AGENT_PORT:-9090}" \
-      --gateway-url "http://host.docker.internal:${HOST_GATEWAY_PORT:-8888}" \
-      --ui-url "http://host.docker.internal:${HOST_UI_PORT:-8501}"
+      --simulation-url "http://host.docker.internal:$(host_port simulation 7000)" \
+      --rag-url "http://host.docker.internal:$(host_port rag 7001)" \
+      --agent-url "http://host.docker.internal:$(host_port agent 9090)" \
+      --gateway-url "http://host.docker.internal:$(host_port gateway 8888)" \
+      --ui-url "http://host.docker.internal:$(host_port ui 8501)"
   fi
+}
+
+host_port() {
+  compose port "$1" "$2" | tail -1 | awk -F: '{print $NF}'
 }
 
 print_urls() {
   cat <<EOF
-Simulation: http://localhost:${HOST_SIMULATION_PORT:-7000}
-RAG:        http://localhost:${HOST_RAG_PORT:-7001}
-Agent:      http://localhost:${HOST_AGENT_PORT:-9090}
-Gateway:    http://localhost:${HOST_GATEWAY_PORT:-8888}
-UI:         http://localhost:${HOST_UI_PORT:-8501}
+Simulation: http://localhost:$(host_port simulation 7000)
+RAG:        http://localhost:$(host_port rag 7001)
+Agent:      http://localhost:$(host_port agent 9090)
+Gateway:    http://localhost:$(host_port gateway 8888)
+UI:         http://localhost:$(host_port ui 8501)
 EOF
 }
 
@@ -148,12 +204,8 @@ case "$mode" in
     cd "$ROOT"
     require_docker
     required_files
+    log "Deployment mode: $DEPLOY_MODE"
     check_ports
-    if [[ -f "$ROOT/.env" ]]; then
-      log "Using existing .env without modifying it."
-    else
-      log "No .env found; using docker-compose.yml defaults."
-    fi
     compose up -d --build
     wait_healthy
     compose ps
