@@ -1,10 +1,18 @@
 {
-  "chunk_count": 10,
+  "chunk_count": 16,
   "corpus_id": "telcomind-rag-quickstart",
-  "corpus_sha256": "09731c6e5e63547e88c0eb4a5205461875dec470878abcdde82b3a9a1e3ce4f5",
+  "corpus_sha256": "3adb67adc0d5720d1579dbb50d46a4004e36d13ce72d37d0c0c39724b3d03b4c",
   "description": "Small offline lexical RAG corpus derived from repository knowledge_base sources.",
   "generated_by": "scripts/build_quickstart_corpus.py",
   "sources": [
+    {
+      "extraction_methods": [
+        "json.text"
+      ],
+      "sha256": "877d4f8fe21401e2ba00223b65c9f35d685185be530c5587b68cd701587c0996",
+      "size_bytes": 601,
+      "source": "knowledge_base/runbooks/baseline_measurement_runbook.json"
+    },
     {
       "extraction_methods": [
         "json.text"
@@ -28,6 +36,14 @@
       "sha256": "7c6fda734f8950ff1df06f01fd6b5fe606f4ad0887f18b694eaa6473f249795e",
       "size_bytes": 486,
       "source": "knowledge_base/runbooks/interference_runbook.json"
+    },
+    {
+      "extraction_methods": [
+        "json.text"
+      ],
+      "sha256": "bf6eca5f51c350d3b733fa7ba3cc975c0a1daae632b12685c26b14dd096c7fd5",
+      "size_bytes": 1709,
+      "source": "knowledge_base/runbooks/live_experiment_guidance.json"
     },
     {
       "extraction_methods": [
@@ -71,5 +87,5 @@
     }
   ],
   "strict_provenance_supported": true,
-  "version": "2026-08-01.batch5"
+  "version": "2026-10-13.live-scenarios"
 }

@@ -1,0 +1,3 @@
+{
+  "text": "A stationary baseline downlink experiment measures delivered application throughput, mean end-to-end application delay, and undelivered packets. Compare per-UE throughput and delay ranges to identify uneven delivery. Undelivered packets can include packets still in flight at simulation stop time and must not automatically be interpreted as radio packet loss. Baseline measurements alone do not establish handover failures, interference, or energy savings. Compare measured performance against explicit operator targets; without targets, do not claim SLA compliance or infer a fault."
+}

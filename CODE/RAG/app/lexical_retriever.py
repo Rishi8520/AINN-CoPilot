@@ -134,6 +134,10 @@ class LexicalBM25Retriever:
                 scores.append((score, doc_index))
 
         ranked = sorted(scores, key=lambda item: (-item[0], self.corpus.chunks[item[1]].id))
+        if re.fullmatch(r"\s*(what is|define|explain)\s+(o-ran|oran)\s*[?.!]*\s*", query, re.I):
+            overview = [item for item in ranked if "overview" in str(self.corpus.chunks[item[1]].metadata.get("section", "")).lower()]
+            if overview:
+                ranked = overview + [item for item in ranked if item not in overview]
         results: list[dict[str, Any]] = []
         for score, doc_index in ranked[:limit]:
             chunk = self.corpus.chunks[doc_index]

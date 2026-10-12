@@ -28,9 +28,33 @@ class SourceSpec:
     text_key: str | None = None
     heading: str | None = None
     include_terms: tuple[str, ...] = ()
+    window_before: int = 260
+    window_after: int = 760
 
 
 SOURCES = [
+    SourceSpec(
+        source="knowledge_base/runbooks/live_experiment_guidance.json", kind="runbook", source_type="runbook",
+        title="TelcoMind Traffic Burst Interpretation", section="traffic_burst",
+        extraction_method="json.text", text_key="traffic",
+    ),
+    SourceSpec(
+        source="knowledge_base/runbooks/live_experiment_guidance.json", kind="runbook", source_type="runbook",
+        title="TelcoMind Resource Comparison Interpretation", section="resource_comparison",
+        extraction_method="json.text", text_key="resources",
+    ),
+    SourceSpec(
+        source="knowledge_base/runbooks/live_experiment_guidance.json", kind="runbook", source_type="runbook",
+        title="TelcoMind Mobility Handover Interpretation", section="mobility_handover",
+        extraction_method="json.text", text_key="mobility",
+    ),
+    SourceSpec(
+        source="knowledge_base/runbooks/baseline_measurement_runbook.json",
+        kind="runbook", source_type="runbook",
+        title="TelcoMind Baseline Measurement Interpretation",
+        section="Stationary baseline throughput and delay",
+        extraction_method="json.text", text_key="text",
+    ),
     SourceSpec(
         source="knowledge_base/runbooks/handover_failure_runbook.json",
         kind="runbook",
@@ -125,6 +149,22 @@ SOURCES = [
         page=24,
         include_terms=("O-RAN ALLIANCE", "secure", "interoperable RAN"),
     ),
+    SourceSpec(
+        source="knowledge_base/specs/etsi_ts_103_982_oran_architecture_description.pdf",
+        kind="pdf", source_type="spec",
+        title="ETSI TS 103 982 O-RAN Architecture Description",
+        section="O-RAN overview and objectives",
+        extraction_method="pypdf.page.term_window", page=11,
+        include_terms=("O-RAN activities",), window_before=0,
+    ),
+    SourceSpec(
+        source="knowledge_base/specs/etsi_ts_103_982_oran_architecture_description.pdf",
+        kind="pdf", source_type="spec",
+        title="ETSI TS 103 982 O-RAN Architecture Description",
+        section="O-RAN overview abbreviation",
+        extraction_method="pypdf.page.term_window", page=10,
+        include_terms=("O-RAN Open RAN",), window_before=0, window_after=14,
+    ),
 ]
 
 
@@ -163,7 +203,7 @@ def load_markdown_heading(path: Path, heading: str) -> str:
     return clean_text(text[start:end])
 
 
-def load_pdf_window(path: Path, page: int, terms: tuple[str, ...]) -> str:
+def load_pdf_window(path: Path, page: int, terms: tuple[str, ...], before: int = 260, after: int = 760) -> str:
     from pypdf import PdfReader
 
     reader = PdfReader(str(path))
@@ -173,8 +213,8 @@ def load_pdf_window(path: Path, page: int, terms: tuple[str, ...]) -> str:
     if not positions:
         raise RuntimeError(f"No include terms found in {path.name} page {page}")
     center = min(positions)
-    start = max(0, center - 260)
-    end = min(len(text), center + 760)
+    start = max(0, center - before)
+    end = min(len(text), center + after)
     return clean_text(text[start:end])
 
 
@@ -207,7 +247,7 @@ def build_entries() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         elif spec.extraction_method == "pypdf.page.term_window":
             if spec.page is None:
                 raise RuntimeError("PDF source requires page")
-            text = load_pdf_window(source_path, spec.page, spec.include_terms)
+            text = load_pdf_window(source_path, spec.page, spec.include_terms, spec.window_before, spec.window_after)
         else:
             raise RuntimeError(f"Unknown extraction method: {spec.extraction_method}")
 
@@ -244,7 +284,7 @@ def write_outputs() -> None:
     CORPUS_PATH.write_text(body, encoding="utf-8", newline="\n")
     manifest = {
         "corpus_id": "telcomind-rag-quickstart",
-        "version": "2026-08-01.batch5",
+        "version": "2026-10-13.live-scenarios",
         "description": "Small offline lexical RAG corpus derived from repository knowledge_base sources.",
         "chunk_count": len(entries),
         "corpus_sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
@@ -264,7 +304,7 @@ def verify_outputs() -> None:
     expected_body = "".join(json.dumps(entry, sort_keys=True, ensure_ascii=False) + "\n" for entry in entries)
     expected_manifest = {
         "corpus_id": "telcomind-rag-quickstart",
-        "version": "2026-08-01.batch5",
+        "version": "2026-10-13.live-scenarios",
         "description": "Small offline lexical RAG corpus derived from repository knowledge_base sources.",
         "chunk_count": len(entries),
         "corpus_sha256": hashlib.sha256(expected_body.encode("utf-8")).hexdigest(),
