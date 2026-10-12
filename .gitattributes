@@ -3,3 +3,7 @@ Dockerfile* text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
 *.ps1 text eol=crlf
+CODE/Agent/*.py whitespace=cr-at-eol
+CODE/Simulation/fixtures/replay/**/*.ini binary
+CODE/Simulation/fixtures/replay/**/*.sca binary
+CODE/Simulation/fixtures/replay/**/*.vci binary
