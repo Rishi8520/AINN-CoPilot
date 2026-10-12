@@ -121,7 +121,7 @@ async def _probe(name: str, url: str, path: str = "/health") -> ToolStatus:
             return ToolStatus(
                 name=name,
                 url=url,
-                reachable=(r.status_code < 500),
+                reachable=(200 <= r.status_code < 300),
                 latency_ms=round(latency, 1),
             )
     except Exception as e:
