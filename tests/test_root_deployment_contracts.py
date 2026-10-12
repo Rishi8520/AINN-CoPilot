@@ -1,4 +1,7 @@
 import json
+import os
+import shutil
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -7,6 +10,54 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 COMPOSE = ROOT / "docker-compose.yml"
 SERVICES = {"simulation", "rag", "agent", "gateway", "ui"}
+
+
+def _fake_deploy(tmp_path, root_env=False, invalid=False):
+    shutil.copyfile(ROOT / "deploy.sh", tmp_path / "deploy.sh")
+    (tmp_path / "CODE").mkdir()
+    (tmp_path / "CODE" / ".env").write_text("LLM_API_KEY=fake-test-only\n")
+    if root_env:
+        (tmp_path / ".env").write_text("LLM_API_KEY=fake-root-only\n")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    docker = bin_dir / "docker"
+    docker.write_text('''#!/bin/sh
+case "$*" in
+  *"config --quiet"*)
+    if [ "$TEST_INVALID_CONFIG" = "1" ]; then echo "required variable LLM_API_KEY is missing" >&2; exit 1; fi
+    exit 0 ;;
+  *"compose version"*) echo "test-compose"; exit 0 ;;
+  *"version"*) echo "test-docker"; exit 0 ;;
+esac
+printf '%s\\n' "$@"
+''')
+    docker.chmod(0o755)
+    environment = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ["PATH"], TEST_INVALID_CONFIG="1" if invalid else "0")
+    return subprocess.run(["bash", str(tmp_path / "deploy.sh"), "--opea", "--status"],
+                          env=environment, capture_output=True, text=True)
+
+
+def test_deploy_uses_code_env_without_root_env(tmp_path):
+    result = _fake_deploy(tmp_path)
+    assert result.returncode == 0
+    assert str(tmp_path / "CODE" / ".env") in result.stdout
+    assert "--env-file" in result.stdout
+    assert "fake-test-only" not in result.stdout
+
+
+def test_deploy_prefers_root_env_when_both_exist(tmp_path):
+    result = _fake_deploy(tmp_path, root_env=True)
+    assert result.returncode == 0
+    assert str(tmp_path / ".env") in result.stdout
+    assert str(tmp_path / "CODE" / ".env") not in result.stdout
+
+
+def test_invalid_config_stops_before_port_json_parsing(tmp_path):
+    result = _fake_deploy(tmp_path, invalid=True)
+    assert result.returncode != 0
+    assert "Compose configuration is invalid" in result.stdout
+    assert "JSONDecodeError" not in result.stdout + result.stderr
+    assert "fake-test-only" not in result.stdout + result.stderr
 
 
 def _compose():
